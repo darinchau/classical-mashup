@@ -8,12 +8,14 @@ comm==0.2.2
 contourpy==1.2.1
 cycler==0.12.1
 debugpy==1.8.2
-decorator==5.1.1
+decorator==4.4.2
 executing==2.0.1
 filelock==3.13.1
 fonttools==4.53.1
 fsspec==2024.2.0
 idna==3.7
+imageio==2.34.2
+imageio-ffmpeg==0.5.1
 ipykernel==6.29.5
 ipython==8.26.0
 jedi==0.19.1
@@ -29,10 +31,12 @@ llvmlite==0.43.0
 MarkupSafe==2.1.5
 matplotlib==3.9.1
 matplotlib-inline==0.1.7
+mido==1.3.2
 more-itertools==10.3.0
+moviepy==1.0.3
 mpmath==1.3.0
 msgpack==1.0.8
-music21==9.1.0
+-e git+https://github.com/darinchau/music21.git@204e9d0b9eec2f2d6ff8d8d3b13c41f912050604#egg=music21
 nest-asyncio==1.6.0
 networkx==3.2.1
 numba==0.60.0
@@ -48,12 +52,13 @@ nvidia-cusolver-cu11==11.4.1.48
 nvidia-cusparse-cu11==11.7.5.86
 nvidia-nccl-cu11==2.20.5
 nvidia-nvtx-cu11==11.8.86
-packaging==24.1
+packaging==23.2
 parso==0.8.4
 pexpect==4.9.0
 pillow==10.2.0
 platformdirs==4.2.2
 pooch==1.8.2
+proglog==0.1.10
 prompt_toolkit==3.0.47
 psutil==6.0.0
 ptyprocess==0.7.0
@@ -64,11 +69,13 @@ Pygments==2.18.0
 pyparsing==3.1.2
 pyserial==3.5
 python-dateutil==2.9.0.post0
+python-rtmidi==1.5.8
 pytube==15.0.0
 pyzmq==26.0.3
 requests==2.32.3
 scikit-learn==1.5.1
 scipy==1.14.0
+setuptools==71.1.0
 six==1.16.0
 sounddevice==0.4.7
 soundfile==0.12.1
@@ -80,6 +87,7 @@ torch==2.3.1+cu118
 torchaudio==2.3.1+cu118
 torchvision==0.18.1+cu118
 tornado==6.4.1
+tqdm==4.66.4
 traitlets==5.14.3
 typing_extensions==4.9.0
 urllib3==2.2.2

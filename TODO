@@ -1,3 +1,5 @@
 Integrate Music21 stuff into Music Score
 Maybe future me can think about how to hook the code to a vst
 Midi to audio collection, each track its own separate thing?
+Normalize midi volume
+Manipulate individual note? Study m21 Score and Note objects

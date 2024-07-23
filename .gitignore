@@ -82,3 +82,4 @@ resources/*
 !resources/scores
 resources/scores/*
 !resources/scores/Musical Offering BWV 1079.mxl
+!resources/scores/Prelude in C Major.mid

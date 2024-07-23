@@ -16,8 +16,8 @@ class M21Score:
         self._data = score
 
     @classmethod
-    def from_xml(cls, path: str):
-        """Read a music21 Stream object from an XML file."""
+    def parse(cls, path: str):
+        """Read a music21 Stream object from an XML file or a MIDI file."""
         return cls(m21.converter.parse(path))
 
     def write_to_midi(self, path: str):
@@ -46,7 +46,7 @@ class M21Score:
                  sample_rate: int = 44100,
                  soundfont_path: str = "~/.fluidsynth/default_sound_font.sf2",
                  verbose: bool = False):
-        """Convert a music21 Stream object to an Audio object."""
+        """Convert a music21 Stream object to our Audio object."""
         with (
             tempfile.NamedTemporaryFile(suffix=".mid") as f1,
             tempfile.NamedTemporaryFile(suffix=".wav") as f2
@@ -54,6 +54,10 @@ class M21Score:
             self.write_to_midi(f1.name)
             convert_midi_to_wav(f1.name, f2.name, soundfont_path, sample_rate, verbose)
             return Audio.load(f2.name)
+
+    def show(self, fmt = None):
+        """Calls the show method of the music21 Stream object. Refer to the music21 documentation for more information."""
+        return self._data.show(fmt)
 
 def play_binary_midi_m21(b: bytes):
     """Play a midi file in bytes inside Jupyter"""

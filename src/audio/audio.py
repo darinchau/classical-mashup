@@ -21,7 +21,6 @@ import numpy as np
 import tempfile
 from .time_series import TimeSeries
 from typing import Callable
-import typing
 from torchaudio.transforms import TimeStretch
 import librosa
 from ..util import is_ipython

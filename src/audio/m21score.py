@@ -20,6 +20,7 @@ from music21.note import Note, Rest
 from music21.chord import Chord
 from music21.key import KeySignature, Key
 from music21.meter.base import TimeSignature
+from music21.interval import Interval
 import subprocess
 from .audio import Audio
 import warnings
@@ -75,6 +76,8 @@ class M21Wrapper(Generic[T]):
     def __repr__(self):
         return f"<|{self._data.__repr__()}|>"
 
+TransposeType = str | int | M21Wrapper[Interval]
+
 class M21Note(M21Wrapper[Note]):
     """Represents a music21 Note object with some convenience functions and properties. A note must be a 12-tone pitched note with a certain duration and within the midi range."""
     def sanity_check(self):
@@ -98,7 +101,11 @@ class M21Note(M21Wrapper[Note]):
         """Returns the MIDI index of the note, where A=440 is index 69. Nice"""
         return int(self._data.pitch.ps)
 
-    def transpose(self, interval: str | int):
+    def transpose(self, interval: TransposeType):
+        if isinstance(interval, M21Wrapper):
+            it = interval._data
+        else:
+            it = interval
         note = self._data.transpose(interval, inPlace=False)
         assert note is not None
         return M21Note(note)
@@ -187,9 +194,13 @@ class M21KeySignature(M21Wrapper[KeySignature]):
     def sharps(self):
         return self._data.sharps
 
-    def transpose(self, interval: str | int):
-        """Transpose the key signature by a certain interval"""
-        key = self._data.transpose(interval)
+    def transpose(self, interval: TransposeType):
+        """Transpose the key signature by a certain interval."""
+        if isinstance(interval, M21Wrapper):
+            it = interval._data
+        else:
+            it = interval
+        key = self._data.transpose(it)
         assert key is not None
         return M21KeySignature(key)
 
@@ -229,7 +240,11 @@ class M21Key(M21Wrapper[Key]):
 
     def transpose(self, interval: str | int):
         """Transpose the key signature by a certain interval"""
-        key = self._data.transpose(interval)
+        if isinstance(interval, M21Wrapper):
+            it = interval._data
+        else:
+            it = interval
+        key = self._data.transpose(it)
         assert key is not None
         return M21Key(key)
 
@@ -245,6 +260,47 @@ class M21Key(M21Wrapper[Key]):
         """Return the parallel key of the key. G major -> G minor"""
         return M21Key(self._data.parallel)
 
+
+class M21Interval(M21Wrapper[Interval]):
+    def sanity_check(self):
+        super().sanity_check()
+        assert self._data.semitones == int(self._data.semitones)
+        specifier = self._data.specifier
+        assert specifier is not None and specifier.niceName in ("Perfect", "Major", "Minor", "Augmented", "Diminished")
+
+    @property
+    def semitones(self):
+        return int(self._data.semitones)
+
+    @property
+    def is_consonant(self):
+        """Returns True if the interval is consonant, aka one of P5, M3, m3, M6, m6, P1 or its compound derivatives"""
+        return self._data.isConsonant()
+
+    @property
+    def name(self):
+        """Returns the name of the interval. P5, M3, m3, etc."""
+        return self._data.name
+
+    @property
+    def complement(self):
+        """Returns the complement of the interval. P5 becomes P4"""
+        return M21Interval(self._data.complement)
+
+    @property
+    def reverse(self):
+        """Returns the reverse of the interval. P5 becomes P-5"""
+        return M21Interval(self._data.reverse())
+
+    @classmethod
+    def from_name(cls, name: str):
+        """Create an interval object from a name. P5, M3, m3, etc."""
+        return cls(Interval(name))
+
+    @classmethod
+    def from_notes(cls, note1: M21Note, note2: M21Note):
+        """Create an interval object from two notes"""
+        return cls(Interval(noteStart=note1._data, noteEnd=note2._data))
 
 
 Q = TypeVar("Q", bound=Stream)
@@ -270,6 +326,10 @@ class M21StreamWrapper(M21Wrapper[Q]):
         for r in self._data.recurse().notes:
             if isinstance(r, Rest):
                 yield M21Rest(r)
+
+    def show(self, fmt = None):
+        """Calls the show method of the music21 Stream object. Refer to the music21 documentation for more information."""
+        return self._data.show(fmt)
 
 
 class M21Measure(M21StreamWrapper[Measure]):
@@ -322,6 +382,7 @@ class M21Score(M21StreamWrapper[Score]):
 
     def play(self):
         """Play the score inside Jupyter."""
+        assert is_ipython(), "This function can only be called inside Jupyter."
         play_binary_midi_m21(self.to_binary_midi())
 
     def to_audio(self,

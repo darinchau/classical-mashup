@@ -24,15 +24,18 @@ import warnings
 from typing import Generic, TypeVar
 
 T = TypeVar("T", bound=M21Object)
+T2 = TypeVar("T2", bound=M21Object)
 class M21Wrapper(Generic[T]):
     """The base wrapper class for music21 objects. All subclasses should inherit from this class."""
     def __init__(self, obj: T):
+        self._checked = False
         self._data = obj
         self.sanity_check()
+        assert self._checked, f"The object {self._data} has not been sanity checked. Have you called sanity_check() on the parent class?"
 
     def sanity_check(self):
         """A method to check certain properties on M21Objects. This poses certain guarantees on objects."""
-        pass
+        self._checked = True
 
     @property
     def duration(self) -> Duration:
@@ -44,16 +47,37 @@ class M21Wrapper(Generic[T]):
         """Return the duration of the object in quarter length."""
         return self.duration.quarterLength
 
+    def get_context_by_class(self, cls: type[T2]) -> M21Wrapper[T2] | None:
+        """Return the parent object of the object that is an instance of cls."""
+        ctx = self._data.getContextByClass(cls)
+        return wrap(ctx) if ctx is not None else None
+
+    @property
+    def part(self):
+        """Returns a Part object that the object belongs to, if it exists."""
+        ctx = self._data.getContextByClass(Part)
+        return M21Part(ctx) if ctx is not None else None
+
+    @property
+    def score(self):
+        """Returns a Score object that the object belongs to, if it exists."""
+        ctx = self._data.getContextByClass(Score)
+        return M21Score(ctx) if ctx is not None else None
+
+    # TODO implement KeySignature, TimeSignature, etc.
+
     def copy(self):
         """Return a deep copy of the object."""
         return copy.deepcopy(self)
 
     def __repr__(self):
-        return f"|<{self._data.__repr__()}>|"
+        return f"<|{self._data.__repr__()}|>"
 
 class M21Note(M21Wrapper[Note]):
+    """Represents a music21 Note object with some convenience functions and properties. A note must be a 12-tone pitched note with a certain duration and within the midi range."""
     def sanity_check(self):
         super().sanity_check()
+        assert self._data.isClassOrSubclass((Note,))
         assert self._data.pitch.isTwelveTone()
         assert 0 <= self.midi_index < 128
 
@@ -79,8 +103,8 @@ class M21Note(M21Wrapper[Note]):
 
 class M21Chord(M21Wrapper[Chord]):
     def sanity_check(self):
-        for n in self.notes:
-            n.sanity_check()
+        super().sanity_check()
+        _ = self.notes # This constructs the notes which will check if every note is a valid note
 
     @property
     def notes(self):
@@ -99,11 +123,57 @@ class M21Chord(M21Wrapper[Chord]):
     def to_roman_numeral(self, key: str):
         return m21.roman.romanNumeralFromChord(self._data, key)
 
+class M21Rest(M21Wrapper[Rest]):
+    """Wrapper for music21 Rest object"""
+    def sanity_check(self):
+        super().sanity_check()
+        assert self._data.isClassOrSubclass((Rest,))
 
-class M21Score(M21Wrapper[Score]):
-    def __init__(self, score: Score):
-        super().__init__(score)
+    @property
+    def name(self):
+        """Returns the full name of the Rest object"""
+        return self._data.fullName
 
+Q = TypeVar("Q", bound=Stream)
+class M21StreamWrapper(M21Wrapper[Q]):
+    """Wrapper for music21 Stream object. Provides methods to iterate over the stream."""
+    def sanity_check(self):
+        super().sanity_check()
+        # TODO add methods to check children
+
+    def __iter__(self):
+        return iter(self._data)
+
+    @property
+    def notes(self):
+        """Returns an iterator of notes in the stream"""
+        for n in self._data.recurse().notes:
+            if isinstance(n, Note):
+                yield M21Note(n)
+
+    @property
+    def rests(self):
+        """Returns an iterator of rests in the stream"""
+        for r in self._data.recurse().notes:
+            if isinstance(r, Rest):
+                yield M21Rest(r)
+
+
+class M21Measure(M21StreamWrapper[Measure]):
+    pass
+
+
+class M21Part(M21StreamWrapper[Part]):
+    """Wrapper for music21 Part object"""
+    def measure(self, measure_number: int):
+        """Grabs a single measure specified by measure number"""
+        measure = self._data.measure(measure_number)
+        if measure is None:
+            raise ValueError(f"Measure {measure_number} does not exist in the part.")
+        return M21Measure(measure)
+
+
+class M21Score(M21StreamWrapper[Score]):
     @classmethod
     def parse(cls, path: str):
         """Read a music21 Stream object from an XML file or a MIDI file."""
@@ -161,16 +231,34 @@ class M21Score(M21Wrapper[Score]):
     @property
     def parts(self):
         """Returns the parts of the score as a list of Parts wrapper."""
-        # TODO wrap each part in its own wrapper object, after we figure out the Parts and Measures wrapper
-        return [M21Wrapper(x) for x in self._data.parts]
+        return [M21Part(x) for x in self._data.parts]
 
     def measure(self, measure_number: int):
         """Grabs a single measure specified by measure number"""
-        return M21Wrapper(self._data.measure(measure_number))
+        return M21Score(self._data.measure(measure_number))
 
     def measures(self, start: int, end: int):
         """Grabs a range of measure specified by measure number"""
         return M21Score(self._data.measures(start, end))
+
+
+def wrap(obj: T) -> M21Wrapper[T]:
+    """Attempts to wrap a music21 object into a wrapper class in the best possible way.
+    Not advisable to use this function directly. Use the wrapper classes directly instead."""
+    class_lookup = [
+        (Note, M21Note),
+        (Rest, M21Rest),
+        (Chord, M21Chord),
+        (Part, M21Part),
+        (Score, M21Score),
+        (Measure, M21Measure),
+        (Stream, M21StreamWrapper)
+    ]
+    for cls, wrapper in class_lookup:
+        if obj.isClassOrSubclass(cls):
+            return wrapper(obj)
+    return M21Wrapper(obj)
+
 
 def play_binary_midi_m21(b: bytes):
     """Play a midi file in bytes inside Jupyter"""

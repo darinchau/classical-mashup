@@ -1,16 +1,9 @@
 # Basic tests about notes
 
-from src.audio.music_score import Note, midi_to_note_name, midi_to_freq
-import pytest
+from src.audio.m21score import *
 
-def test_note():
-    assert midi_to_note_name(60) == "C4"
-    assert midi_to_note_name(69) == "A4"
-    assert midi_to_note_name(21) == "A0"
-    try:
-        midi_to_note_name(128)
-        assert False
-    except AssertionError:
-        pass
-
-    assert midi_to_freq(69) == 440
+def test_note_transposition():
+    note1 = M21Note(Note("A4"))
+    note2 = note1.transpose(3)
+    assert note1.midi_index == 69
+    assert note2.midi_index == 72

@@ -23,15 +23,16 @@ from .audio import Audio
 import warnings
 from typing import Generic, TypeVar
 
-_SUPPORTED_CLASSES = [
-    Stream, Score, Part, Measure, Note, Rest, Chord
-]
-
 T = TypeVar("T", bound=M21Object)
 class M21Wrapper(Generic[T]):
     """The base wrapper class for music21 objects. All subclasses should inherit from this class."""
     def __init__(self, obj: T):
         self._data = obj
+        self.sanity_check()
+
+    def sanity_check(self):
+        """A method to check certain properties on M21Objects. This poses certain guarantees on objects."""
+        pass
 
     @property
     def duration(self) -> Duration:
@@ -48,49 +49,56 @@ class M21Wrapper(Generic[T]):
         return copy.deepcopy(self)
 
     def __repr__(self):
-        return f"[<{self._data.__repr__()}>]"
+        return f"|<{self._data.__repr__()}>|"
 
-    def make_tree(self):
-        """Makes a M21NoteTree object, mainly used for visualization for now."""
-        def _build_tree_recursive(stream: Stream) -> list[M21NoteTree]:
-            children: list[M21NoteTree] = []
-            for element in stream:
-                if isinstance(element, Stream):
-                    c = _build_tree_recursive(element)
-                    children.append(M21NoteTree(element, children=c))
-                else:
-                    children.append(M21NoteTree(element))
-            return children
-        if isinstance(self._data, Stream):
-            return M21NoteTree(self._data, _build_tree_recursive(self._data))
-        return M21NoteTree(self._data)
+class M21Note(M21Wrapper[Note]):
+    def sanity_check(self):
+        super().sanity_check()
+        assert self._data.pitch.isTwelveTone()
+        assert 0 <= self.midi_index < 128
 
-class M21NoteTree(M21Wrapper[T]):
-    """A basic recursive data structure used to visualize stuff and perform recursive operations on Streams objects."""
-    def __init__(self, obj: T, children: list[M21NoteTree] | None = None):
-        super().__init__(obj)
-        if children is None:
-            children = []
-        self.children = children
+    @property
+    def name(self) -> str:
+        """Return the name of the note in octave notation"""
+        return self._data.pitch.nameWithOctave
 
-    def make_tree(self):
-        return self
+    @property
+    def frequency(self) -> float:
+        """Returns the note frequency of the note"""
+        return self._data.pitch.frequency
 
-    def make_repr(self, indent: int = 4):
-        def make_repr_recursive(elem: M21NoteTree, current_indent: int, start: OffsetQL, end: OffsetQL):
-            indent_str = " " * current_indent
-            s = [f"{indent_str}({start} - {end}){elem._data.__repr__()}"]
-            for child in elem.children:
-                start = child._data.getOffsetBySite(elem._data)
-                start_timestamp = float_to_fraction_time(start)
-                end = start + child.duration.quarterLength
-                end_timestamp = float_to_fraction_time(end)
-                s.append(make_repr_recursive(child, current_indent + indent, start_timestamp, end_timestamp))
-            return "\n".join(s)
-        return make_repr_recursive(self, 0, 0, float_to_fraction_time(self.quarter_length))
+    @property
+    def midi_index(self):
+        """Returns the MIDI index of the note, where A=440 is index 69. Nice"""
+        return int(self._data.pitch.ps)
 
-    def __repr__(self):
-        return self.make_repr(indent = 4)
+    def transpose(self, interval: str | int):
+        note = self._data.transpose(interval, inPlace=False)
+        assert note is not None
+        return M21Note(note)
+
+class M21Chord(M21Wrapper[Chord]):
+    def sanity_check(self):
+        for n in self.notes:
+            n.sanity_check()
+
+    @property
+    def notes(self):
+        """Return the notes that makes up the chord"""
+        return tuple(M21Note(x) for x in self._data.notes)
+
+    @property
+    def name(self):
+        """Returns the name of the chord"""
+        return self._data.commonName
+
+    @property
+    def inversion(self):
+        return self._data.inversion()
+
+    def to_roman_numeral(self, key: str):
+        return m21.roman.romanNumeralFromChord(self._data, key)
+
 
 class M21Score(M21Wrapper[Score]):
     def __init__(self, score: Score):

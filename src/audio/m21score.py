@@ -14,16 +14,18 @@ import base64
 from music21 import common
 from music21.base import Music21Object as M21Object
 from music21.duration import Duration
-from music21.common.types import OffsetQL
+from music21.common.types import OffsetQL, StepName
 from music21.stream.base import Stream, Score, Part, Opus, Measure
 from music21.note import Note, Rest
 from music21.chord import Chord
+from music21.key import KeySignature, Key
+from music21.meter.base import TimeSignature
 import subprocess
 from .audio import Audio
 import warnings
 from typing import Generic, TypeVar
 
-T = TypeVar("T", bound=M21Object)
+T = TypeVar("T", bound=M21Object, covariant=True)
 T2 = TypeVar("T2", bound=M21Object)
 class M21Wrapper(Generic[T]):
     """The base wrapper class for music21 objects. All subclasses should inherit from this class."""
@@ -101,6 +103,12 @@ class M21Note(M21Wrapper[Note]):
         assert note is not None
         return M21Note(note)
 
+    @property
+    def step(self) -> StepName:
+        """Returns the step name of the note. Must be one of 'C', 'D', 'E', 'F', 'G', 'A', 'B'."""
+        return self._data.pitch.step
+
+
 class M21Chord(M21Wrapper[Chord]):
     def sanity_check(self):
         super().sanity_check()
@@ -123,6 +131,7 @@ class M21Chord(M21Wrapper[Chord]):
     def to_roman_numeral(self, key: str):
         return m21.roman.romanNumeralFromChord(self._data, key)
 
+
 class M21Rest(M21Wrapper[Rest]):
     """Wrapper for music21 Rest object"""
     def sanity_check(self):
@@ -133,6 +142,110 @@ class M21Rest(M21Wrapper[Rest]):
     def name(self):
         """Returns the full name of the Rest object"""
         return self._data.fullName
+
+
+class M21TimeSignature(M21Wrapper[TimeSignature]):
+    def sanity_check(self):
+        super().sanity_check()
+        assert self._data.numerator in (2, 3, 4, 6, 9, 12)
+        assert self._data.denominator in (2, 4, 8)
+
+    @property
+    def numerator(self):
+        return self._data.numerator
+
+    @property
+    def denominator(self):
+        return self._data.denominator
+
+    @property
+    def ratio(self):
+        return self._data.ratioString
+
+    @staticmethod
+    def from_string(s: str):
+        """Create a TimeSignature object from a string. Use 'C' or 'common' for common time and 'C/' or 'cut' for cut time."""
+        if s in ("C", "common"):
+            ts = TimeSignature("4/4")
+            ts.symbol = "common"
+            return M21TimeSignature(ts)
+        elif s in ("C/", "cut"):
+            ts = TimeSignature("2/2")
+            ts.symbol = "cut"
+            return M21TimeSignature(ts)
+        else:
+            return M21TimeSignature(TimeSignature(s))
+
+
+class M21KeySignature(M21Wrapper[KeySignature]):
+    def sanity_check(self):
+        super().sanity_check()
+        assert self._data.sharps in range(-7, 8)
+        assert not self._data.isNonTraditional
+
+    @property
+    def sharps(self):
+        return self._data.sharps
+
+    def transpose(self, interval: str | int):
+        """Transpose the key signature by a certain interval"""
+        key = self._data.transpose(interval)
+        assert key is not None
+        return M21KeySignature(key)
+
+    def accidental_by_step(self, step: StepName) -> int:
+        """Returns the accidental of a certain step in the key signature by step name
+
+        ks = KeySignature(3) # 3 sharps
+        ks.accidental_by_step('C') == 1
+        ks.accidental_by_step('D') == 0
+        ks.accidental_by_step('G-') == -2
+        """
+        accidental = self._data.accidentalByStep(step)
+        if accidental is None:
+            return 0
+        return int(accidental.alter)
+
+class M21Key(M21Wrapper[Key]):
+    def sanity_check(self):
+        super().sanity_check()
+        assert self._data.mode in ("major", "minor")
+        assert self._data.tonic.isTwelveTone()
+        assert self._data.sharps in range(-7, 8)
+        assert not self._data.isNonTraditional
+
+    @property
+    def tonic(self):
+        return self._data.tonic.name
+
+    @property
+    def mode(self):
+        return self._data.mode
+
+    @property
+    def sharps(self) -> int:
+        assert self._data.sharps is not None
+        return self._data.sharps
+
+    def transpose(self, interval: str | int):
+        """Transpose the key signature by a certain interval"""
+        key = self._data.transpose(interval)
+        assert key is not None
+        return M21Key(key)
+
+    def get_key_signature(self):
+        """Cast this key object to a key signature object"""
+        return M21KeySignature(self._data)
+
+    def relative(self):
+        """Return the relative key of the key. G major -> E minor"""
+        return M21Key(self._data.relative)
+
+    def parallel(self):
+        """Return the parallel key of the key. G major -> G minor"""
+        return M21Key(self._data.parallel)
+
+
 
 Q = TypeVar("Q", bound=Stream)
 class M21StreamWrapper(M21Wrapper[Q]):
@@ -242,7 +355,7 @@ class M21Score(M21StreamWrapper[Score]):
         return M21Score(self._data.measures(start, end))
 
 
-def wrap(obj: T) -> M21Wrapper[T]:
+def wrap(obj: T2) -> M21Wrapper[T2]:
     """Attempts to wrap a music21 object into a wrapper class in the best possible way.
     Not advisable to use this function directly. Use the wrapper classes directly instead."""
     class_lookup = [

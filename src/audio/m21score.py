@@ -1,4 +1,6 @@
-# Provides a wrapper for music21's Score class with some convenience functions
+# Provides a wrapper for music21's classes with some convenience functions
+# This is because music21's classes are very general. By imposing certain restrictions
+# from the scope of our project, we can make the code easier (for me) to reason about.
 
 from __future__ import annotations
 from fractions import Fraction
@@ -10,48 +12,97 @@ import tempfile
 from src.util import is_ipython
 import base64
 from music21 import common
-from music21.stream.base import Stream, Score, Part, Opus
+from music21.base import Music21Object as M21Object
+from music21.duration import Duration
+from music21.common.types import OffsetQL
+from music21.stream.base import Stream, Score, Part, Opus, Measure
+from music21.note import Note, Rest
+from music21.chord import Chord
 import subprocess
 from .audio import Audio
 import warnings
+from typing import Generic, TypeVar
 
-class M21NoteTree:
-    def __init__(self, start: Fraction, end: Fraction, obj: m21.base.Music21Object, children: list[M21NoteTree] | None = None):
-        self.start = start
-        self.end = end
-        self.obj = obj
+_SUPPORTED_CLASSES = [
+    Stream, Score, Part, Measure, Note, Rest, Chord
+]
+
+T = TypeVar("T", bound=M21Object)
+class M21Wrapper(Generic[T]):
+    """The base wrapper class for music21 objects. All subclasses should inherit from this class."""
+    def __init__(self, obj: T):
+        self._data = obj
+
+    @property
+    def duration(self) -> Duration:
+        """Return the duration object of the underlying m21 object."""
+        return self._data.duration
+
+    @property
+    def quarter_length(self) -> OffsetQL:
+        """Return the duration of the object in quarter length."""
+        return self.duration.quarterLength
+
+    def copy(self):
+        """Return a deep copy of the object."""
+        return copy.deepcopy(self)
+
+    def __repr__(self):
+        return f"[<{self._data.__repr__()}>]"
+
+    def make_tree(self):
+        """Makes a M21NoteTree object, mainly used for visualization for now."""
+        def _build_tree_recursive(stream: Stream) -> list[M21NoteTree]:
+            children: list[M21NoteTree] = []
+            for element in stream:
+                if isinstance(element, Stream):
+                    c = _build_tree_recursive(element)
+                    children.append(M21NoteTree(element, children=c))
+                else:
+                    children.append(M21NoteTree(element))
+            return children
+        if isinstance(self._data, Stream):
+            return M21NoteTree(self._data, _build_tree_recursive(self._data))
+        return M21NoteTree(self._data)
+
+class M21NoteTree(M21Wrapper[T]):
+    """A basic recursive data structure used to visualize stuff and perform recursive operations on Streams objects."""
+    def __init__(self, obj: T, children: list[M21NoteTree] | None = None):
+        super().__init__(obj)
+        if children is None:
+            children = []
         self.children = children
 
-    def make_repr(self, indent: int = 4):
-        def make_repr_recursive(elem: M21NoteTree, current_indent: int):
-            indent_str = " " * current_indent
-            s = f"{indent_str}({elem.start} - {elem.end}) {elem.obj}"
-            if elem.children is None:
-                return s
+    def make_tree(self):
+        return self
 
-            strs = [s]
-            for c in elem.children:
-                strs.append(make_repr_recursive(c, current_indent=current_indent+indent))
-            return "\n".join(strs)
-        return make_repr_recursive(self, 0)
+    def make_repr(self, indent: int = 4):
+        def make_repr_recursive(elem: M21NoteTree, current_indent: int, start: OffsetQL, end: OffsetQL):
+            indent_str = " " * current_indent
+            s = [f"{indent_str}({start} - {end}){elem._data.__repr__()}"]
+            for child in elem.children:
+                start = child._data.getOffsetBySite(elem._data)
+                start_timestamp = float_to_fraction_time(start)
+                end = start + child.duration.quarterLength
+                end_timestamp = float_to_fraction_time(end)
+                s.append(make_repr_recursive(child, current_indent + indent, start_timestamp, end_timestamp))
+            return "\n".join(s)
+        return make_repr_recursive(self, 0, 0, float_to_fraction_time(self.quarter_length))
 
     def __repr__(self):
         return self.make_repr(indent = 4)
 
-class M21Score:
+class M21Score(M21Wrapper[Score]):
     def __init__(self, score: Score):
-        if len(score.parts) != 2:
-            warnings.warn(f"Expected 2 parts in a score but found {len(score.parts)}. Not a big deal but might break future code.")
-        # TODO investigate and add support for parts / opus
-        self._data = score
+        super().__init__(score)
 
     @classmethod
     def parse(cls, path: str):
         """Read a music21 Stream object from an XML file or a MIDI file."""
         # Purely for convenience
         test_cases = {
-            "-test1": "resources/scores/Prelude in C Major.mid",
-            "-test2": "resources/scores/Musical Offering BWV 1079.mxl"
+            "-test.prelude": "resources/scores/Prelude in C Major.mid",
+            "-test.1079": "resources/scores/Musical Offering BWV 1079.mxl"
         }
         if path in test_cases:
             path = test_cases[path]
@@ -99,8 +150,19 @@ class M21Score:
         """Calls the show method of the music21 Stream object. Refer to the music21 documentation for more information."""
         return self._data.show(fmt)
 
-    def make_tree(self):
-        return make_tree(self._data)
+    @property
+    def parts(self):
+        """Returns the parts of the score as a list of Parts wrapper."""
+        # TODO wrap each part in its own wrapper object, after we figure out the Parts and Measures wrapper
+        return [M21Wrapper(x) for x in self._data.parts]
+
+    def measure(self, measure_number: int):
+        """Grabs a single measure specified by measure number"""
+        return M21Wrapper(self._data.measure(measure_number))
+
+    def measures(self, start: int, end: int):
+        """Grabs a range of measure specified by measure number"""
+        return M21Score(self._data.measures(start, end))
 
 def play_binary_midi_m21(b: bytes):
     """Play a midi file in bytes inside Jupyter"""
@@ -147,7 +209,7 @@ def convert_midi_to_wav(input_path: str, output_path: str, soundfont_path="~/.fl
         stdout=subprocess.DEVNULL if not verbose else None,
         stderr=subprocess.DEVNULL if not verbose else None)
 
-def float_to_fraction_time(f: float | Fraction, *, limit_denom: int = m21.defaults.limitOffsetDenominator) -> Fraction:
+def float_to_fraction_time(f: OffsetQL, *, limit_denom: int = m21.defaults.limitOffsetDenominator) -> Fraction:
     """Turn a float into a fraction
     limit_denom (int): Limits the denominator to be less than or equal to limit_denom
 
@@ -168,24 +230,3 @@ def float_to_fraction_time(f: float | Fraction, *, limit_denom: int = m21.defaul
             remainder *= -1
 
     return int(quotient) + remainder
-
-def _build_tree_recursive(stream: Stream) -> list[M21NoteTree]:
-    def pack_elem(in_element):
-        start = in_element.getOffsetBySite(stream)
-        start_timestamp = float_to_fraction_time(start)
-        end = start + in_element.duration.quarterLength
-        end_timestamp = float_to_fraction_time(end)
-        return start_timestamp, end_timestamp
-
-    children: list[M21NoteTree] = []
-    for element in stream:
-        start_timestamp, end_timestamp = pack_elem(element)
-        if isinstance(element, Stream):
-            c = _build_tree_recursive(element)
-            children.append(M21NoteTree(start_timestamp, end_timestamp, element, children=c))
-        else:
-            children.append(M21NoteTree(start_timestamp, end_timestamp, element))
-    return children
-
-def make_tree(stream: Stream):
-    return M21NoteTree(Fraction(), float_to_fraction_time(stream.duration.quarterLength), stream, _build_tree_recursive(stream))

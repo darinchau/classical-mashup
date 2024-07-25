@@ -24,26 +24,34 @@ from music21.interval import Interval
 import subprocess
 from .audio import Audio
 import warnings
-from typing import Generic, TypeVar
+from typing import Generic, TypeVar, Iterable
 
 T = TypeVar("T", bound=M21Object, covariant=True)
 T2 = TypeVar("T2", bound=M21Object)
 class M21Wrapper(Generic[T]):
     """The base wrapper class for music21 objects. All subclasses should inherit from this class."""
-    def __init__(self, obj: T):
-        self._checked = False
+    def __init__(self, obj: T, *, skip_check: bool = False):
         self._data = obj
-        self.sanity_check()
+        self._checked = skip_check
+        if not self._checked:
+            self.sanity_check()
         assert self._checked, f"The object {self._data} has not been sanity checked. Have you called sanity_check() on the parent class?"
 
     def sanity_check(self):
         """A method to check certain properties on M21Objects. This poses certain guarantees on objects."""
+        # Checks the base type
+        try:
+            base_ty = self.__orig_bases__[0].__args__[0]
+            assert isinstance(self._data, base_ty)
+        except (AttributeError, IndexError, TypeError):
+            pass
         self._checked = True
 
     @property
     def duration(self) -> Duration:
-        """Return the duration object of the underlying m21 object."""
-        return self._data.duration
+        """Return a copy of the duration object of the underlying m21 object."""
+        duration = self._data.duration
+        return copy.deepcopy(duration)
 
     @property
     def quarter_length(self) -> OffsetQL:
@@ -67,14 +75,27 @@ class M21Wrapper(Generic[T]):
         ctx = self._data.getContextByClass(Score)
         return M21Score(ctx) if ctx is not None else None
 
-    # TODO implement KeySignature, TimeSignature, etc.
-
     def copy(self):
         """Return a deep copy of the object."""
         return copy.deepcopy(self)
 
+    def show(self, fmt = None):
+        """Calls the show method of the music21 Stream object. Refer to the music21 documentation for more information."""
+        return self._data.show(fmt)
+
     def __repr__(self):
         return f"<|{self._data.__repr__()}|>"
+
+    @property
+    def id(self):
+        """Returns a unique integer representing this object"""
+        return self._data.id
+
+    def set_duration(self, quarter_length: float):
+        new_obj = self.copy()
+        new_obj._data.duration.quarterLength = quarter_length
+        return new_obj
+
 
 TransposeType = str | int | M21Wrapper[Interval]
 
@@ -82,7 +103,6 @@ class M21Note(M21Wrapper[Note]):
     """Represents a music21 Note object with some convenience functions and properties. A note must be a 12-tone pitched note with a certain duration and within the midi range."""
     def sanity_check(self):
         super().sanity_check()
-        assert self._data.isClassOrSubclass((Note,))
         assert self._data.pitch.isTwelveTone()
         assert 0 <= self.midi_index < 128
 
@@ -110,11 +130,25 @@ class M21Note(M21Wrapper[Note]):
         assert note is not None
         return M21Note(note)
 
+    @classmethod
+    def from_name(cls, name: str, **kwargs):
+        """Create a note object from a name. C4, D#5, etc.
+
+        If quarter_length > 0, then this would override any kwargs that modify the duration of the created note"""
+        # I just hope m21 would support 8th, 4th, 2nd
+        if "type" in kwargs and kwargs["type"] in ("8th", "4th", "2nd"):
+            kwargs["type"] = {
+                "8th": "eighth",
+                "4th": "quarter",
+                "2nd": "half"
+            }[kwargs["type"]]
+        note = Note(name, **kwargs)
+        return cls(note)
+
     @property
     def step(self) -> StepName:
         """Returns the step name of the note. Must be one of 'C', 'D', 'E', 'F', 'G', 'A', 'B'."""
         return self._data.pitch.step
-
 
 class M21Chord(M21Wrapper[Chord]):
     def sanity_check(self):
@@ -136,7 +170,17 @@ class M21Chord(M21Wrapper[Chord]):
         return self._data.inversion()
 
     def to_roman_numeral(self, key: str):
+        """Convert the chord to a roman numeral in a certain key"""
         return m21.roman.romanNumeralFromChord(self._data, key)
+
+    def to_closed_position(self):
+        """Return a new chord object that is in closed position"""
+        return M21Chord(self._data.closedPosition())
+
+    @classmethod
+    def from_roman_numeral(cls, rn: str, key: str):
+        """Create a chord object from a roman numeral in a certain key"""
+        return cls(m21.roman.RomanNumeral(rn, key))
 
 
 class M21Rest(M21Wrapper[Rest]):
@@ -216,6 +260,7 @@ class M21KeySignature(M21Wrapper[KeySignature]):
         if accidental is None:
             return 0
         return int(accidental.alter)
+
 
 class M21Key(M21Wrapper[Key]):
     def sanity_check(self):
@@ -308,31 +353,84 @@ class M21StreamWrapper(M21Wrapper[Q]):
     """Wrapper for music21 Stream object. Provides methods to iterate over the stream."""
     def sanity_check(self):
         super().sanity_check()
-        # TODO add methods to check children
+        for children in self:
+            pass
 
     def __iter__(self):
-        return iter(self._data)
+        for children in self._data:
+            yield wrap(children)
 
     @property
     def notes(self):
         """Returns an iterator of notes in the stream"""
-        for n in self._data.recurse().notes:
-            if isinstance(n, Note):
-                yield M21Note(n)
+        return [M21Note(n) for n in self._data.recurse().notes if isinstance(n, Note)]
 
     @property
     def rests(self):
         """Returns an iterator of rests in the stream"""
-        for r in self._data.recurse().notes:
-            if isinstance(r, Rest):
-                yield M21Rest(r)
+        return [M21Rest(n) for n in self._data.recurse().notes if isinstance(n, Rest)]
 
     def show(self, fmt = None):
         """Calls the show method of the music21 Stream object. Refer to the music21 documentation for more information."""
         return self._data.show(fmt)
 
+    def add_grace_note(self, note: M21Note | M21Chord, grace_notes: Iterable[M21Note | M21Chord], *,
+                       slur: bool = True,
+                       appoggiatura: bool = False,):
+        """Add grace notes to the note. The grace note will be inserted before the note and after any other grace notes. Returns the new stream.
+        The function will also implicitly modify all the notes in the grace_notes list to become the added grace_notes
+
+        Extra parameters:
+        slur (bool): Whether to add a slur to the whole thing or no
+        appogiatura (bool): Whether to add an appoggiatura or a slashed grace note (acciaccatura) """
+        def wrap(x: Note | Chord):
+            if isinstance(x, Note):
+                return M21Note(x)
+            elif isinstance(x, Chord):
+                return M21Chord(x)
+            else:
+                raise ValueError(f"Unknown type found for note: {x.__class__}")
+
+        new_stream = self.copy()
+
+        # Find the corresponding note in the copied stream
+        copied_note = [n for n in new_stream._data.recurse().notes if n.derivation.origin is not None and n.derivation.origin.id == note.id]
+        if not copied_note:
+            raise ValueError(f"Note {note.id} not found in {self}")
+        copied_note = copied_note[0]
+
+        # Perform some checks on copied_note. We perform type checks on the ._data to account for subclasses
+        assert len(copied_note.pitches) > 0
+        assert all(p.isTwelveTone() for p in copied_note.pitches)
+        copied_note = wrap(copied_note)
+
+        _ = [x._data.getGrace(appoggiatura=appoggiatura, inPlace=True) for x in grace_notes]
+        grace_notes = [x for x in grace_notes if x is not None]
+
+        active_site = copied_note._data.activeSite
+        if active_site is None:
+            raise ValueError(f"Note {note.id} is currently not active")
+
+        offset = copied_note._data.getOffsetBySite(active_site)
+        for gn in grace_notes:
+            active_site.insert(offset, gn._data)
+
+        #TODO implement slur
+        return new_stream
+
+    def add_nachschlagen(self, note: M21Note | M21Chord, grace_notes: Iterable[M21Note | M21Chord], *,
+                         slur: bool = False):
+        """Adds a nachschlagen to a note. A nachschlagen is the little flourish notes after a trill that indicates the resolve of a trill."""
+        stream = self.add_grace_note(note=note, grace_notes=grace_notes, slur=False, appoggiatura=True)
+        copied_note = [n for n in stream._data.recurse().notes if n.derivation.origin is not None and n.derivation.origin.id == note.id][0]
+        for gn in grace_notes:
+            gn._data.priority = copied_note.priority + 1
+        # TODO implement slur
+        return stream
+
 
 class M21Measure(M21StreamWrapper[Measure]):
+    """Wrapper for a music21 Measure object"""
     pass
 
 
@@ -398,10 +496,6 @@ class M21Score(M21StreamWrapper[Score]):
             convert_midi_to_wav(f1.name, f2.name, soundfont_path, sample_rate, verbose)
             return Audio.load(f2.name)
 
-    def show(self, fmt = None):
-        """Calls the show method of the music21 Stream object. Refer to the music21 documentation for more information."""
-        return self._data.show(fmt)
-
     @property
     def parts(self):
         """Returns the parts of the score as a list of Parts wrapper."""
@@ -426,10 +520,14 @@ def wrap(obj: T2) -> M21Wrapper[T2]:
         (Part, M21Part),
         (Score, M21Score),
         (Measure, M21Measure),
+        (Interval, M21Interval),
+        (Key, M21Key),
+        (KeySignature, M21KeySignature),
+        (TimeSignature, M21TimeSignature),
         (Stream, M21StreamWrapper)
     ]
     for cls, wrapper in class_lookup:
-        if obj.isClassOrSubclass(cls):
+        if obj.isClassOrSubclass((cls,)):
             return wrapper(obj)
     return M21Wrapper(obj)
 

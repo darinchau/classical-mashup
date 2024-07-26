@@ -232,6 +232,7 @@ class M21KeySignature(M21Wrapper[KeySignature]):
         super().sanity_check()
         assert self._data.sharps in range(-7, 8)
         assert not self._data.isNonTraditional
+        assert self.quarter_length == 0.0
 
     @property
     def sharps(self):
@@ -413,10 +414,10 @@ class M21StreamWrapper(M21Wrapper[Q]):
             raise ValueError(f"Note {note.id} is currently not active")
 
         offset = copied_note._data.getOffsetBySite(active_site)
-        priority_eps = 1
         for i, gn in enumerate(reversed(grace_notes)):
             active_site.insert(offset, gn._data)
-            gn._data.priority = copied_note._data.priority - i * priority_eps
+            if override_priority:
+                gn._data.priority = copied_note._data.priority - i - 1
 
         if slur:
             sl = m21.spanner.Slur([gn._data for gn in grace_notes] + [copied_note._data])
@@ -427,8 +428,8 @@ class M21StreamWrapper(M21Wrapper[Q]):
         """Adds a nachschlagen to a note. A nachschlagen is the little flourish notes after a trill that indicates the resolve of a trill."""
         stream = self.add_grace_note(note=note, grace_notes=grace_notes, slur=False, appoggiatura=True, override_priority=override_priority)
         copied_note = [n for n in stream._data.recurse().notes if n.derivation.origin is not None and n.derivation.origin.id == note.id][0]
-        for gn in grace_notes:
-            gn._data.priority = copied_note.priority + 1
+        for i, gn in enumerate(grace_notes):
+            gn._data.priority = copied_note.priority + 1 + i
         return stream
 
 

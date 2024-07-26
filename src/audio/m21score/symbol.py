@@ -1,9 +1,13 @@
 from music21.key import KeySignature, Key
 from music21.meter.base import TimeSignature
 from music21.interval import Interval
+from music21.spanner import Slur
+from music21.clef import Clef, TrebleClef, BassClef
 from music21.common.types import StepName
+from typing import Literal
 from .base import M21Wrapper, TransposeType
 from .note import M21Note
+from .util import wrap
 
 class M21TimeSignature(M21Wrapper[TimeSignature]):
     def sanity_check(self):
@@ -158,3 +162,82 @@ class M21Interval(M21Wrapper[Interval]):
     def from_notes(cls, note1: M21Note, note2: M21Note):
         """Create an interval object from two notes"""
         return cls(Interval(noteStart=note1._data, noteEnd=note2._data))
+
+
+class M21Slur(M21Wrapper[Slur]):
+    @property
+    def spanned_elements(self):
+        """Returns a structure which indicates the notes spanned in the slur."""
+        stream = self._data.getSpannedElements()
+        return [wrap(x) for x in stream]
+
+    def is_first(self, obj: M21Wrapper):
+        """Returns True if the object is the first in the spanner"""
+        return self._data.isFirst(obj._data)
+
+    def is_last(self, obj: M21Wrapper):
+        """Returns True if the object is the last in the wrapper"""
+        return self._data.isLast(obj._data)
+
+class M21Clef(M21Wrapper[Clef]):
+    def sanity_check(self):
+        super().sanity_check()
+        assert self._data.name in ('treble', 'bass'), f"Unknown clef found: {self._data.__class__.__name__}"
+
+    @property
+    def name(self):
+        """Returns the name """
+        n = self._data.name
+        if n == "treble":
+            return "treble"
+        if n == "bass":
+            return "bass"
+        raise ValueError(f"Unknown name for clef: {n}. Did you implicitly modify the clef?")
+
+    @property
+    def is_treble(self):
+        """Returns True if the clef is a treble clef"""
+        return self.name == "treble"
+
+    @property
+    def is_bass(self):
+        """Returns True if the clef is a bass clef"""
+        return self.name == "bass"
+
+    class _TrebleClefDispatcher:
+        _INSTANCE = None
+        def __new__(cls):
+            if cls._INSTANCE is not None:
+                return cls._INSTANCE
+            return super().__new__(cls)
+
+        def __eq__(self, other: Clef | M21Wrapper[Clef]):
+            if isinstance(other, Clef):
+                return isinstance(other, TrebleClef)
+            elif isinstance(other, M21Wrapper):
+                return isinstance(other._data, TrebleClef)
+            return False
+
+        def get(self):
+            return M21Clef(TrebleClef())
+
+
+    class _BassClefDispatcher:
+        _INSTANCE = None
+        def __new__(cls):
+            if cls._INSTANCE is not None:
+                return cls._INSTANCE
+            return super().__new__(cls)
+
+        def __eq__(self, other: Clef | M21Wrapper[Clef]):
+            if isinstance(other, Clef):
+                return isinstance(other, BassClef)
+            elif isinstance(other, M21Wrapper):
+                return isinstance(other._data, BassClef)
+            return False
+
+        def get(self):
+            return M21Clef(BassClef())
+
+    TREBLE_CLEF = _TrebleClefDispatcher()
+    BASS_CLEF = _BassClefDispatcher()

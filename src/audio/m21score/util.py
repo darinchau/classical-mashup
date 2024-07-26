@@ -31,7 +31,10 @@ T = TypeVar("T", bound=M21Object, covariant=True)
 def wrap(obj: T) -> M21Wrapper[T]:
     """Attempts to wrap a music21 object into a wrapper class in the best possible way.
     Not advisable to use this function directly. Use the wrapper classes directly instead."""
-    from . import M21Note, M21Rest, M21Chord, M21Part, M21Score, M21Measure, M21Interval, M21Key, M21KeySignature, M21TimeSignature, M21StreamWrapper
+    from . import (
+        M21Note, M21Rest, M21Chord, M21Part, M21Score, M21Measure, M21Interval, M21Key,
+        M21KeySignature, M21TimeSignature, M21StreamWrapper, M21Clef, M21Slur
+    )
     class_lookup = [
         (Note, M21Note),
         (Rest, M21Rest),
@@ -43,6 +46,8 @@ def wrap(obj: T) -> M21Wrapper[T]:
         (Key, M21Key),
         (KeySignature, M21KeySignature),
         (TimeSignature, M21TimeSignature),
+        (Slur, M21Slur),
+        (Clef, M21Clef),
         (Stream, M21StreamWrapper)
     ]
     for cls, wrapper in class_lookup:

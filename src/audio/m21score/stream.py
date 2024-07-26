@@ -19,6 +19,15 @@ class GraceNoteContext(Stream):
         self._type = _type
         super().__init__(elements, **keywords)
 
+    @property
+    def note_type(self) -> GraceNoteType:
+        if self._type == "grace":
+            return "grace"
+        elif self._type == "nachschlagen":
+            return "nachschlagen"
+        else:
+            raise ValueError(f"Unknown grace note type {self._type}")
+
     def _reprInternal(self):
         tc = type(self.parent)
         return f'for {tc.__module__}.{tc.__qualname__}'
@@ -191,7 +200,7 @@ def _add_grace_note(new_stream: M21StreamWrapper, note: M21Note | M21Chord, grac
     existing_ctx = active_site.getElementsByClass(GraceNoteContext)
     if existing_ctx is not None:
         for ctx in existing_ctx:
-            if ctx._type == _type and ctx.parent == copied_note._data:
+            if ctx.parent == copied_note._data:
                 raise NotImplementedError(f"Note {note.id} ({note.name}) already has grace notes. Repeated calls to add_grace_note is not supported yet.")
 
     # Gets the grace notes

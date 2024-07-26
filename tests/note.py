@@ -11,7 +11,7 @@ def test_note_transposition():
 def test_prelude_1():
     c = M21Score.parse("-test.prelude")
     assert c.quarter_length == 140
-    assert c.measures(1, 2).parts[0].notes.__next__().name == "G4"
+    assert c.measures(1, 2).parts[0].notes[0].name == "G4"
 
 def test_immutability_duration():
     c = M21Score.parse("-test.prelude")

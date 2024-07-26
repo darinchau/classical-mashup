@@ -21,6 +21,8 @@ from music21.chord import Chord
 from music21.key import KeySignature, Key
 from music21.meter.base import TimeSignature
 from music21.interval import Interval
+from music21.clef import Clef
+from music21.spanner import Slur
 import subprocess
 from .audio import Audio
 import warnings
@@ -185,10 +187,6 @@ class M21Chord(M21Wrapper[Chord]):
 
 class M21Rest(M21Wrapper[Rest]):
     """Wrapper for music21 Rest object"""
-    def sanity_check(self):
-        super().sanity_check()
-        assert self._data.isClassOrSubclass((Rest,))
-
     @property
     def name(self):
         """Returns the full name of the Rest object"""
@@ -200,6 +198,7 @@ class M21TimeSignature(M21Wrapper[TimeSignature]):
         super().sanity_check()
         assert self._data.numerator in (2, 3, 4, 6, 9, 12)
         assert self._data.denominator in (2, 4, 8)
+        assert self.quarter_length == 0.0
 
     @property
     def numerator(self):
@@ -376,13 +375,15 @@ class M21StreamWrapper(M21Wrapper[Q]):
 
     def add_grace_note(self, note: M21Note | M21Chord, grace_notes: Iterable[M21Note | M21Chord], *,
                        slur: bool = True,
-                       appoggiatura: bool = False,):
+                       appoggiatura: bool = False,
+                       override_priority: bool = False):
         """Add grace notes to the note. The grace note will be inserted before the note and after any other grace notes. Returns the new stream.
         The function will also implicitly modify all the notes in the grace_notes list to become the added grace_notes
 
         Extra parameters:
         slur (bool): Whether to add a slur to the whole thing or no
-        appogiatura (bool): Whether to add an appoggiatura or a slashed grace note (acciaccatura) """
+        appogiatura (bool): Whether to add an appoggiatura or a slashed grace note (acciaccatura)
+        override_priority (bool): Whether to automatically change the priority of grace notes. Set to True if the order of grace notes are not expected"""
         def wrap(x: Note | Chord):
             if isinstance(x, Note):
                 return M21Note(x)
@@ -412,20 +413,22 @@ class M21StreamWrapper(M21Wrapper[Q]):
             raise ValueError(f"Note {note.id} is currently not active")
 
         offset = copied_note._data.getOffsetBySite(active_site)
-        for gn in grace_notes:
+        priority_eps = 1
+        for i, gn in enumerate(reversed(grace_notes)):
             active_site.insert(offset, gn._data)
+            gn._data.priority = copied_note._data.priority - i * priority_eps
 
-        #TODO implement slur
+        if slur:
+            sl = m21.spanner.Slur([gn._data for gn in grace_notes] + [copied_note._data])
+            active_site.insert(0.0, sl)
         return new_stream
 
-    def add_nachschlagen(self, note: M21Note | M21Chord, grace_notes: Iterable[M21Note | M21Chord], *,
-                         slur: bool = False):
+    def add_nachschlagen(self, note: M21Note | M21Chord, grace_notes: Iterable[M21Note | M21Chord], *, override_priority: bool = False):
         """Adds a nachschlagen to a note. A nachschlagen is the little flourish notes after a trill that indicates the resolve of a trill."""
-        stream = self.add_grace_note(note=note, grace_notes=grace_notes, slur=False, appoggiatura=True)
+        stream = self.add_grace_note(note=note, grace_notes=grace_notes, slur=False, appoggiatura=True, override_priority=override_priority)
         copied_note = [n for n in stream._data.recurse().notes if n.derivation.origin is not None and n.derivation.origin.id == note.id][0]
         for gn in grace_notes:
             gn._data.priority = copied_note.priority + 1
-        # TODO implement slur
         return stream
 
 

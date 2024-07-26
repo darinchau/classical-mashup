@@ -201,7 +201,7 @@ def _add_grace_note(new_stream: M21StreamWrapper, note: M21Note | M21Chord, grac
     if existing_ctx is not None:
         for ctx in existing_ctx:
             if ctx.parent == copied_note._data:
-                raise NotImplementedError(f"Note {note.id} ({note.name}) already has grace notes. Repeated calls to add_grace_note is not supported yet.")
+                raise ValueError(f"Note {note.id} ({note.name}) already has grace notes. Repeated calls to add_grace_note is not supported yet.")
 
     # Gets the grace notes
     for x in grace_notes:

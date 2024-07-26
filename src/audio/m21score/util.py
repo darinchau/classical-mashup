@@ -51,7 +51,7 @@ def wrap(obj: T) -> M21Wrapper[T]:
         (Stream, M21StreamWrapper)
     ]
     for cls, wrapper in class_lookup:
-        if obj.isClassOrSubclass((cls,)):
+        if isinstance(obj, cls):
             return wrapper(obj)
     return M21Wrapper(obj)
 

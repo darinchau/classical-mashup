@@ -1,8 +1,11 @@
 from .base import M21Wrapper, TransposeType
 import music21 as m21
+from music21.note import NotRest, Note, Rest
+from music21.chord import Chord
 from music21.common.types import StepName
+from typing import Literal, Generic, TypeVar
 
-class M21Note(M21Wrapper[m21.note.Note]):
+class M21Note(M21Wrapper[Note]):
     """Represents a music21 Note object with some convenience functions and properties. A note must be a 12-tone pitched note with a certain duration and within the midi range."""
     def sanity_check(self):
         super().sanity_check()
@@ -29,7 +32,7 @@ class M21Note(M21Wrapper[m21.note.Note]):
             it = interval._data
         else:
             it = interval
-        note = self._data.transpose(interval, inPlace=False)
+        note = self._data.transpose(it, inPlace=False)
         assert note is not None
         return M21Note(note)
 
@@ -45,7 +48,7 @@ class M21Note(M21Wrapper[m21.note.Note]):
                 "4th": "quarter",
                 "2nd": "half"
             }[kwargs["type"]]
-        note = m21.note.Note(name, **kwargs)
+        note = Note(name, **kwargs)
         return cls(note)
 
     @property
@@ -53,7 +56,7 @@ class M21Note(M21Wrapper[m21.note.Note]):
         """Returns the step name of the note. Must be one of 'C', 'D', 'E', 'F', 'G', 'A', 'B'."""
         return self._data.pitch.step
 
-class M21Chord(M21Wrapper[m21.chord.Chord]):
+class M21Chord(M21Wrapper[Chord]):
     def sanity_check(self):
         super().sanity_check()
         _ = self.notes # This constructs the notes which will check if every note is a valid note
@@ -85,8 +88,23 @@ class M21Chord(M21Wrapper[m21.chord.Chord]):
         """Create a chord object from a roman numeral in a certain key"""
         return cls(m21.roman.RomanNumeral(rn, key))
 
+    @classmethod
+    def from_notes(cls, notes: list[M21Note]):
+        """Create a chord object from a list of notes"""
+        return cls(Chord([n._data for n in notes]))
 
-class M21Rest(M21Wrapper[m21.note.Rest]):
+    def transpose(self, interval: TransposeType):
+        """Transpose the chord by a certain interval"""
+        if isinstance(interval, M21Wrapper):
+            it = interval._data
+        else:
+            it = interval
+        chord = self._data.transpose(it, inPlace=False)
+        assert chord is not None
+        return M21Chord(chord)
+
+
+class M21Rest(M21Wrapper[Rest]):
     """Wrapper for music21 Rest object"""
     @property
     def name(self):

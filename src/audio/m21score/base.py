@@ -84,6 +84,7 @@ class M21Wrapper(Generic[T]):
         return self._data.id
 
     def set_duration(self, quarter_length: float):
+        """Sets the duration of the object to be the quarter length specified. Returns a new obejct."""
         new_obj = self.copy()
         new_obj._data.duration.quarterLength = quarter_length
         return new_obj

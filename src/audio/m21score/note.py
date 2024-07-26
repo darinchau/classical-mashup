@@ -1,11 +1,69 @@
+import copy
 from .base import M21Wrapper, TransposeType
 import music21 as m21
 from music21.note import NotRest, Note, Rest
 from music21.chord import Chord
 from music21.common.types import StepName
 from typing import Literal, Generic, TypeVar
+from music21.duration import Duration, GraceDuration, AppoggiaturaDuration
 
-class M21Note(M21Wrapper[Note]):
+T = TypeVar("T", bound=Note | Chord, covariant=True)
+def _wrap_upcast(obj: Note | Chord):
+    if isinstance(obj, Note):
+        return M21Note(obj)
+    elif isinstance(obj, Chord):
+        return M21Chord(obj)
+    else:
+        raise ValueError(f"Cannot wrap object of type {type(obj)}")
+
+class M21NoteWrapper(M21Wrapper[T]):
+    """Represents a music21 Note object with some convenience functions and properties. A note must be a 12-tone pitched note with a certain duration and within the midi range."""
+    def sanity_check(self):
+        super().sanity_check()
+        assert isinstance(self._data, (Note, Chord))
+
+    @property
+    def pitches(self):
+        """Return the pitches of the note"""
+        return tuple(copy.deepcopy(x) for x in self._data.pitches)
+
+    @property
+    def name(self):
+        """Returns a common name of the note"""
+        return self._data.fullName
+
+    def get_grace(self, appoggiatura: bool = False):
+        """Returns a copy of the grace notes of the note"""
+        return self._data.getGrace(appoggiatura=appoggiatura)
+
+    @property
+    def is_grace(self):
+        """Returns True if the note or chord is a grace note"""
+        return isinstance(self.duration, GraceDuration)
+
+    @property
+    def is_appoggiatura(self):
+        """Returns True if the note or chord is an appoggiatura"""
+        return isinstance(self.duration, AppoggiaturaDuration)
+
+    def transpose(self, interval: TransposeType):
+        if isinstance(interval, M21Wrapper):
+            it = interval._data
+        else:
+            it = interval
+        note = self._data.transpose(it, inPlace=False)
+        assert note is not None
+        return _wrap_upcast(note)
+
+    def get_next_note(self):
+        """Returns the next note or chord in the active stream"""
+        next_note = self._data.next(NotRest)
+        if next_note is None:
+            return None
+        return _wrap_upcast(next_note)
+
+
+class M21Note(M21NoteWrapper[Note]):
     """Represents a music21 Note object with some convenience functions and properties. A note must be a 12-tone pitched note with a certain duration and within the midi range."""
     def sanity_check(self):
         super().sanity_check()
@@ -27,15 +85,6 @@ class M21Note(M21Wrapper[Note]):
         """Returns the MIDI index of the note, where A=440 is index 69. Nice"""
         return int(self._data.pitch.ps)
 
-    def transpose(self, interval: TransposeType):
-        if isinstance(interval, M21Wrapper):
-            it = interval._data
-        else:
-            it = interval
-        note = self._data.transpose(it, inPlace=False)
-        assert note is not None
-        return M21Note(note)
-
     @classmethod
     def from_name(cls, name: str, **kwargs):
         """Create a note object from a name. C4, D#5, etc.
@@ -55,6 +104,7 @@ class M21Note(M21Wrapper[Note]):
     def step(self) -> StepName:
         """Returns the step name of the note. Must be one of 'C', 'D', 'E', 'F', 'G', 'A', 'B'."""
         return self._data.pitch.step
+
 
 class M21Chord(M21Wrapper[Chord]):
     def sanity_check(self):

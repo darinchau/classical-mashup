@@ -15,9 +15,11 @@ from music21.interval import Interval
 from music21.stream.base import Part, Score
 from typing import Generic, TypeVar
 from .util import wrap
+import warnings
 
 T = TypeVar("T", bound=M21Object, covariant=True)
 T2 = TypeVar("T2", bound=M21Object)
+IDType = int | str
 class M21Wrapper(Generic[T]):
     """The base wrapper class for music21 objects. All subclasses should inherit from this class."""
     def __init__(self, obj: T, *, skip_check: bool = False):
@@ -36,6 +38,14 @@ class M21Wrapper(Generic[T]):
         except (AttributeError, IndexError, TypeError):
             pass
         self._checked = True
+
+    def __eq__(self, value) -> bool:
+        if isinstance(value, M21Wrapper):
+            return self._data == value._data
+        if isinstance(value, M21Object):
+            warnings.warn("Comparing M21Wrapper with M21Object. This is probably a bug.")
+            return self._data == value
+        return False
 
     @property
     def duration(self) -> Duration:
@@ -79,8 +89,8 @@ class M21Wrapper(Generic[T]):
         return f"<|{self._data.__repr__()}|>"
 
     @property
-    def id(self):
-        """Returns a unique integer representing this object"""
+    def id(self) -> IDType:
+        """Returns a unique ID object representing this object"""
         return self._data.id
 
     def set_duration(self, quarter_length: float):

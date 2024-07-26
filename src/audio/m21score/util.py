@@ -33,7 +33,7 @@ def wrap(obj: T) -> M21Wrapper[T]:
     Not advisable to use this function directly. Use the wrapper classes directly instead."""
     from . import (
         M21Note, M21Rest, M21Chord, M21Part, M21Score, M21Measure, M21Interval, M21Key,
-        M21KeySignature, M21TimeSignature, M21StreamWrapper, M21Clef, M21Slur
+        M21KeySignature, M21TimeSignature, M21StreamWrapper, M21Clef, M21Slur, M21Wrapper
     )
     class_lookup = [
         (Note, M21Note),

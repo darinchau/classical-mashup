@@ -1,6 +1,7 @@
 # Basic tests about notes
 
 from src.audio.m21score import *
+from music21 import corpus
 
 def test_note_transposition():
     note1 = M21Note(Note("A4"))
@@ -19,3 +20,10 @@ def test_immutability_duration():
     # so this code is counterintuitive but as long as we avoid this type of mutable patterns
     # I think it might actually be easier to use
     assert c.quarter_length == 140
+
+def test_get_next_note():
+    agnus = corpus.parse('palestrina/Agnus_01')
+    agnus_sop = agnus.parts[0]
+    s = M21Part(agnus_sop)
+    assert s.notes[3].get_next_note() == s.notes[4]
+    assert s.notes[5].get_next_note() == s.notes[6]

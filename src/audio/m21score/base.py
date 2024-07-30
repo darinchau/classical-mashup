@@ -99,4 +99,9 @@ class M21Wrapper(Generic[T]):
         new_obj._data.duration.quarterLength = quarter_length
         return new_obj
 
+    @property
+    def offset(self) -> OffsetQL:
+        """Returns the offset of the note/chord with respect to its active site"""
+        return self._data.offset
+
 TransposeType = str | int | M21Wrapper[Interval]

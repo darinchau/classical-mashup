@@ -47,3 +47,9 @@ def test_grace_note():
         assert False, "Should not be able to add grace note repeatedly"
     except ValueError:
         pass
+
+    part3 = part2.add_grace_note(part2.notes[3], [
+        M21Note.from_name("G#4").set_duration(1/4)
+    ])
+
+    assert part3.notes[1]._data.offset == 2.0

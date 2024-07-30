@@ -179,6 +179,7 @@ class M21Slur(M21Wrapper[Slur]):
         """Returns True if the object is the last in the wrapper"""
         return self._data.isLast(obj._data)
 
+
 class M21Clef(M21Wrapper[Clef]):
     def sanity_check(self):
         super().sanity_check()

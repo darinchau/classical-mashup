@@ -8,6 +8,7 @@ import tempfile
 from src.util import is_ipython
 import base64
 from music21 import common
+from music21.articulations import Tenuto, Accent, Staccato
 from music21.base import Music21Object as M21Object
 from music21.duration import Duration
 from music21.common.types import OffsetQL, StepName
@@ -33,7 +34,8 @@ def wrap(obj: T) -> M21Wrapper[T]:
     Not advisable to use this function directly. Use the wrapper classes directly instead."""
     from . import (
         M21Note, M21Rest, M21Chord, M21Part, M21Score, M21Measure, M21Interval, M21Key,
-        M21KeySignature, M21TimeSignature, M21StreamWrapper, M21Clef, M21Slur, M21Wrapper
+        M21KeySignature, M21TimeSignature, M21StreamWrapper, M21Clef, M21Slur, M21Wrapper,
+        M21Tenuto, M21Accent, M21Staccato
     )
     class_lookup = [
         (Note, M21Note),
@@ -48,6 +50,9 @@ def wrap(obj: T) -> M21Wrapper[T]:
         (TimeSignature, M21TimeSignature),
         (Slur, M21Slur),
         (Clef, M21Clef),
+        (Tenuto, M21Tenuto),
+        (Accent, M21Accent),
+        (Staccato, M21Staccato),
         (Stream, M21StreamWrapper)
     ]
     for cls, wrapper in class_lookup:

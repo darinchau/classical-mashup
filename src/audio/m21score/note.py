@@ -3,7 +3,7 @@ from .base import M21Wrapper, TransposeType
 import music21 as m21
 from music21.note import NotRest, Note, Rest
 from music21.chord import Chord
-from music21.common.types import StepName
+from music21.common.types import StepName, OffsetQL
 from typing import Literal, Generic, TypeVar
 from music21.duration import Duration, GraceDuration, AppoggiaturaDuration
 

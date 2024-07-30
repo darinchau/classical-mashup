@@ -4,6 +4,7 @@ from music21.interval import Interval
 from music21.spanner import Slur
 from music21.clef import Clef, TrebleClef, BassClef
 from music21.common.types import StepName
+from music21.dynamics import Dynamic
 from typing import Literal
 from .base import M21Wrapper, TransposeType
 from .note import M21Note
@@ -205,40 +206,79 @@ class M21Clef(M21Wrapper[Clef]):
         """Returns True if the clef is a bass clef"""
         return self.name == "bass"
 
-    class _TrebleClefDispatcher:
-        _INSTANCE = None
-        def __new__(cls):
-            if cls._INSTANCE is not None:
-                return cls._INSTANCE
-            return super().__new__(cls)
+class M21TrebleClef(M21Wrapper[TrebleClef]):
+    def sanity_check(self):
+        super().sanity_check()
+        assert self.name == "treble"
+        assert self.octave_change == 0
 
-        def __eq__(self, other: Clef | M21Wrapper[Clef]):
-            if isinstance(other, Clef):
-                return isinstance(other, TrebleClef)
-            elif isinstance(other, M21Wrapper):
-                return isinstance(other._data, TrebleClef)
-            return False
+    @property
+    def name(self):
+        """Returns the name """
+        n = self._data.name
+        if n == "treble":
+            return "treble"
+        raise ValueError(f"Unknown name for clef: {n}. Did you implicitly modify the clef?")
 
-        def get(self):
-            return M21Clef(TrebleClef())
+    @property
+    def octave_change(self):
+        """Returns the octave change of the clef"""
+        return self._data.octaveChange
 
+    @property
+    def lowest_line(self):
+        """Returns the lowest line of the clef"""
+        return self._data.lowestLine
 
-    class _BassClefDispatcher:
-        _INSTANCE = None
-        def __new__(cls):
-            if cls._INSTANCE is not None:
-                return cls._INSTANCE
-            return super().__new__(cls)
+class M21BassClef(M21Wrapper[BassClef]):
+    def sanity_check(self):
+        super().sanity_check()
+        assert self.name == "bass"
+        assert self.octave_change == 0
 
-        def __eq__(self, other: Clef | M21Wrapper[Clef]):
-            if isinstance(other, Clef):
-                return isinstance(other, BassClef)
-            elif isinstance(other, M21Wrapper):
-                return isinstance(other._data, BassClef)
-            return False
+    @property
+    def name(self):
+        """Returns the name """
+        n = self._data.name
+        if n == "bass":
+            return "bass"
+        raise ValueError(f"Unknown name for clef: {n}. Did you implicitly modify the clef?")
 
-        def get(self):
-            return M21Clef(BassClef())
+    @property
+    def octave_change(self):
+        """Returns the octave change of the clef"""
+        return self._data.octaveChange
 
-    TREBLE_CLEF = _TrebleClefDispatcher()
-    BASS_CLEF = _BassClefDispatcher()
+    @property
+    def lowest_line(self):
+        """Returns the lowest line of the clef"""
+        return self._data.lowestLine
+
+class M21Dynamics(M21Wrapper[Dynamic]):
+    _VALUES = ("ppp", "ppp", "pp", "p", "mp", "mf", "f", "ff", "fff", "sf", "fp")
+
+    def sanity_check(self):
+        super().sanity_check()
+        assert self._data.value in self._VALUES
+        assert self.quarter_length == 0.0
+
+    @property
+    def value(self):
+        """Returns the dynamic value of the articulation. ppp, pp, p, mp, mf, f, ff, fff, sf, fp"""
+        # Use this for comparison instead of the string value to hint the type checker
+        for v in self._VALUES:
+            if v == self._data.value:
+                return v
+        raise ValueError(f"Unknown dynamic value: {self._data.value}")
+
+    @property
+    def name(self):
+        """Returns the length shift of the articulation. 1 means no shift, 1.1 means 10% longer, 0.9 means 10% shorter"""
+        return self._data.longName
+
+    @staticmethod
+    def from_string(s: str):
+        """Create a Dynamics object from a string. Use 'ppp', 'pp', 'p', 'mp', 'mf', 'f', 'ff', 'fff'"""
+        if s not in M21Dynamics._VALUES:
+            raise ValueError(f"Unknown dynamic value: {s}")
+        return M21Dynamics(Dynamic(s))

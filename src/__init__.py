@@ -13,3 +13,4 @@ def setup():
     _MUSIC21_SETUP = True
 
 from .audio import Audio
+from .audio.m21score import M21Note, M21Chord, M21Rest, M21Part, M21Score

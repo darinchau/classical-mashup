@@ -209,6 +209,13 @@ class M21Chord(M21Wrapper[Chord]):
         assert chord is not None
         return M21Chord(chord)
 
+    @property
+    def top_note(self):
+        """Return the top note of the chord"""
+        top_note_pitch = max(self._data.pitches, key=lambda x: (x.ps, x.diatonicNoteNum))
+        n = Note(top_note_pitch, quarterLength=self._data.quarterLength)
+        return M21Note(n)
+
 
 class M21Rest(M21Wrapper[Rest]):
     """Wrapper for music21 Rest object"""

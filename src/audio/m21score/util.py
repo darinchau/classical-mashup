@@ -60,6 +60,13 @@ def wrap(obj: T) -> M21Wrapper[T]:
             return wrapper(obj)
     return M21Wrapper(obj)
 
+def check_obj(obj: M21Object) -> bool:
+    """Checks if the object is valid for use for our purposes, i.e. it fits in our restrictions"""
+    try:
+        _ = wrap(obj)
+        return True
+    except AssertionError:
+        return False
 
 def play_binary_midi_m21(b: bytes):
     """Play a midi file in bytes inside Jupyter"""

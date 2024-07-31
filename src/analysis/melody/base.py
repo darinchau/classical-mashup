@@ -1,9 +1,10 @@
 import music21 as m21
 from ...audio.m21score import (
-    M21Note, M21Chord, M21Rest, M21Part,
-    Note, Rest, Chord, KeySignature, TimeSignature, M21Object
+    M21Note, M21Chord, M21Rest, M21Part, M21Wrapper,
+    Note, Rest, Chord, KeySignature, TimeSignature, M21Object, Stream
 )
 from ...audio.m21score.util import check_obj as _check_obj
+from typing import TypeVar
 
 def _cum_offset(obj: M21Object) -> float:
     """Returns the cumulative offset of the object in the score"""
@@ -12,6 +13,15 @@ def _cum_offset(obj: M21Object) -> float:
         cum += obj.offset
         obj = obj.activeSite
     return cum
+
+def _copy_part_with_classes(obj: M21Part, classes: tuple[type, ...]) -> M21Part:
+    """Helper method that copies a stream recursively, keeping only the specified classes"""
+    new_stream = obj.copy()
+    assert isinstance(new_stream._data, Stream)
+    for el in new_stream._data.recurse():
+        if not isinstance(el, classes) and not isinstance(el, Stream):
+            el.activeSite.remove(el)
+    return new_stream
 
 def _sanitize(part: M21Part) -> M21Part:
     """Sanitize a music21 Part object to make it suitable for use as a melody.
@@ -23,8 +33,9 @@ def _sanitize(part: M21Part) -> M21Part:
     - For time signatures, only the first one is kept. Will raise an error if this causes a change in time signature.
     """
     # Do a first pass to remove anything thats definitely illegal
-    new_part = part.copy()
-    new_part._data.removeByNotOfClass([Note, Rest, Chord, KeySignature, TimeSignature])
+    # Cannot use removeByNotOfClass because it does not remove recursively
+    filter_list = [Note, Rest, Chord, KeySignature, TimeSignature]
+    new_part = _copy_part_with_classes(part, tuple(filter_list))
 
     replacements = []
 

@@ -105,6 +105,21 @@ class M21Measure(M21StreamWrapper[Measure]):
 
 class M21Part(M21StreamWrapper[Part]):
     """Wrapper for music21 Part object"""
+    @classmethod
+    def parse(cls, path: str):
+        """Read a music21 Stream object from an XML file or a MIDI file."""
+        # Purely for convenience
+        test_cases = {
+            "-test.prelude": "resources/scores/Prelude in C Major.mid",
+            "-test.1079": "resources/scores/Musical Offering BWV 1079.mxl"
+        }
+        if path in test_cases:
+            path = test_cases[path]
+        part = m21.converter.parse(path)
+        if not isinstance(part, Part):
+            raise ValueError(f"The file {path} is parsed as a {part.__class__.__name__}.")
+        return cls(part)
+
     def measure(self, measure_number: int):
         """Grabs a single measure specified by measure number"""
         measure = self._data.measure(measure_number)
@@ -126,7 +141,7 @@ class M21Score(M21StreamWrapper[Score]):
             path = test_cases[path]
         score = m21.converter.parse(path)
         if not isinstance(score, Score):
-            raise ValueError(f"The file {path} is parsed as a {score.__class__.__name__} which is not supported yet.")
+            raise ValueError(f"The file {path} is parsed as a {score.__class__.__name__}.")
         return cls(score)
 
     def write_to_midi(self, path: str):

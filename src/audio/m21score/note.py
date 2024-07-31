@@ -1,10 +1,11 @@
+from __future__ import annotations
 import copy
 from .base import M21Wrapper, TransposeType
 import music21 as m21
 from music21.note import NotRest, Note, Rest
 from music21.chord import Chord
 from music21.common.types import StepName, OffsetQL
-from typing import Literal, Generic, TypeVar
+from typing import Literal, Generic, TypeVar, Self
 from music21.duration import Duration, GraceDuration, AppoggiaturaDuration
 
 def _wrap_upcast(obj):
@@ -46,14 +47,14 @@ class M21NoteWrapper(M21Wrapper[T]):
         """Returns True if the note or chord is an appoggiatura"""
         return isinstance(self.duration, AppoggiaturaDuration)
 
-    def transpose(self, interval: TransposeType):
+    def transpose(self, interval: TransposeType) -> Self:
         if isinstance(interval, M21Wrapper):
             it = interval._data
         else:
             it = interval
         note = self._data.transpose(it, inPlace=False)
         assert note is not None
-        return _wrap_upcast(note)
+        return self.__class__(note)
 
     def get_next_note(self):
         """Returns the next note or chord in the active stream"""
@@ -88,7 +89,7 @@ class M21NoteWrapper(M21Wrapper[T]):
             return
         return ctx
 
-    def get_grace_notes(self):
+    def get_grace_notes(self) -> list[M21Note | M21Chord]:
         """Returns a list of grace notes associated with the note"""
         ctx = self._get_associated_grace_note_ctx(as_parent=True)
         if ctx is None:

@@ -27,6 +27,7 @@ from typing import Generic, TypeVar, Iterable, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .base import M21Wrapper
+    from .stream import M21Score, M21Part
 
 T = TypeVar("T", bound=M21Object, covariant=True)
 def wrap(obj: T) -> M21Wrapper[T]:
@@ -134,3 +135,23 @@ def float_to_fraction_time(f: OffsetQL, *, limit_denom: int = m21.defaults.limit
             remainder *= -1
 
     return int(quotient) + remainder
+
+def load_from_corpus(corpus_name: str, movement_number: int | None = None, **kwargs) -> M21Score | M21Part:
+    """Loads a piece from the music21 corpus"""
+    from .stream import M21Score, M21Part
+    corpus = m21.corpus.parse(corpus_name, movement_number, **kwargs)
+    if isinstance(corpus, Score):
+        return M21Score(corpus)
+
+    assert isinstance(corpus, Part), f"Unexpected type: {type(corpus)}"
+    return M21Part(corpus)
+
+def load_part_from_corpus(corpus_name: str, movement_number: int | None = None, **kwargs) -> M21Part:
+    """Loads a part from the music21 corpus. If it is a score, returns the first part"""
+    from .stream import M21Part
+    corpus = m21.corpus.parse(corpus_name, movement_number, **kwargs)
+    if isinstance(corpus, Score):
+        return M21Part(corpus.parts[0])
+
+    assert isinstance(corpus, Part), f"Unexpected type: {type(corpus)}"
+    return M21Part(corpus)

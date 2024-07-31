@@ -7,6 +7,7 @@ from .note import M21Note, M21Chord, M21Rest
 from .stream import M21Part, M21Score, M21Measure, M21StreamWrapper
 from .symbol import M21TimeSignature, M21KeySignature, M21Key, M21Interval, M21Slur, M21Clef
 from .articulation import M21Accent, M21Articulation, M21Staccato, M21Tenuto
+from .util import load_from_corpus, load_part_from_corpus
 
 from music21.base import Music21Object as M21Object
 from music21.duration import Duration

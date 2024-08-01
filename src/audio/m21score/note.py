@@ -7,6 +7,7 @@ from music21.chord import Chord
 from music21.common.types import StepName, OffsetQL
 from typing import Literal, Generic, TypeVar, Self
 from music21.duration import Duration, GraceDuration, AppoggiaturaDuration
+from .util import wrap
 
 def _wrap_upcast(obj):
     if isinstance(obj, Note):
@@ -118,6 +119,11 @@ class M21NoteWrapper(M21Wrapper[T]):
     def has_grace_note_child(self):
         """Returns True if the note has a grace note child"""
         return self._get_associated_grace_note_ctx(as_parent=True) is not None
+
+    @property
+    def expressions(self):
+        """Returns a list of expressions associated with the note"""
+        return [wrap(x) for x in self._data.expressions]
 
 
 class M21Note(M21NoteWrapper[Note]):

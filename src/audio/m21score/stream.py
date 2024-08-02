@@ -101,7 +101,7 @@ class M21StreamWrapper(M21Wrapper[T]):
         return stream
 
     def _sanitize_in_place(self):
-        for el in self._data.recurse():
+        for el in self._data.iter():
             if not is_type_allowed(el):
                 el.activeSite.remove(el)
                 continue

@@ -1,7 +1,9 @@
 # Basic tests about notes
 
 from src.audio.m21score import *
+from src.analysis.melody import Melody
 from music21.note import Note
+from music21.stream.base import Part
 from music21 import corpus, converter
 from src.analysis.melody.base import _sanitize
 
@@ -83,3 +85,9 @@ def test_sanitize_grace_note():
     assert part2.notes[0] == gn
     part2._sanitize_in_place()
     assert part2.notes[0] == gn
+
+def test_sanitize_strip_ties():
+    part = converter.parse('tinyNotation: 2/4 d4. e8~ e4 d4~ d8 f4.')
+    assert isinstance(part, Part)
+    m = Melody(M21Part(part))
+    assert len(m._part.notes) == 4

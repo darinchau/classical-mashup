@@ -101,6 +101,7 @@ class M21StreamWrapper(M21Wrapper[T]):
         return stream
 
     def _sanitize_in_place(self):
+        self._data.stripTies(inPlace = True)
         for el in self._data.iter():
             if not is_type_allowed(el):
                 el.activeSite.remove(el)
@@ -111,6 +112,36 @@ class M21StreamWrapper(M21Wrapper[T]):
             wrap(el)._sanitize_in_place() # Sanitize child
         return
 
+    def write_to_midi(self, path: str):
+        """Write a music21 Stream object to a MIDI file."""
+        file = streamToMidiFile(self._data, addStartDelay=True)
+        file.open(path, "wb")
+        try:
+            file.write()
+        finally:
+            file.close()
+
+    def to_binary_midi(self):
+        """Convert a music21 Stream object to a binary MIDI file."""
+        with tempfile.NamedTemporaryFile(suffix='.mid') as f:
+            self.write_to_midi(f.name)
+            with open(f.name, 'rb') as fp:
+                binary_midi_data = fp.read()
+
+        return binary_midi_data
+
+    def to_audio(self,
+                 sample_rate: int = 44100,
+                 soundfont_path: str = "~/.fluidsynth/default_sound_font.sf2",
+                 verbose: bool = False):
+        """Convert a music21 Stream object to our Audio object."""
+        with (
+            tempfile.NamedTemporaryFile(suffix=".mid") as f1,
+            tempfile.NamedTemporaryFile(suffix=".wav") as f2
+        ):
+            self.write_to_midi(f1.name)
+            convert_midi_to_wav(f1.name, f2.name, soundfont_path, sample_rate, verbose)
+            return Audio.load(f2.name)
 
 class M21Measure(M21StreamWrapper[Measure]):
     """Wrapper for a music21 Measure object"""
@@ -150,41 +181,10 @@ class M21Score(M21StreamWrapper[Score]):
         """Read a music21 Stream object from an XML file or a MIDI file."""
         return cls(_parse(path, Score))
 
-    def write_to_midi(self, path: str):
-        """Write a music21 Stream object to a MIDI file."""
-        file = streamToMidiFile(self._data, addStartDelay=True)
-        file.open(path, "wb")
-        try:
-            file.write()
-        finally:
-            file.close()
-
-    def to_binary_midi(self):
-        """Convert a music21 Stream object to a binary MIDI file."""
-        with tempfile.NamedTemporaryFile(suffix='.mid') as f:
-            self.write_to_midi(f.name)
-            with open(f.name, 'rb') as fp:
-                binary_midi_data = fp.read()
-
-        return binary_midi_data
-
     def play(self):
         """Play the score inside Jupyter."""
         assert is_ipython(), "This function can only be called inside Jupyter."
         play_binary_midi_m21(self.to_binary_midi())
-
-    def to_audio(self,
-                 sample_rate: int = 44100,
-                 soundfont_path: str = "~/.fluidsynth/default_sound_font.sf2",
-                 verbose: bool = False):
-        """Convert a music21 Stream object to our Audio object."""
-        with (
-            tempfile.NamedTemporaryFile(suffix=".mid") as f1,
-            tempfile.NamedTemporaryFile(suffix=".wav") as f2
-        ):
-            self.write_to_midi(f1.name)
-            convert_midi_to_wav(f1.name, f2.name, soundfont_path, sample_rate, verbose)
-            return Audio.load(f2.name)
 
     @property
     def parts(self):

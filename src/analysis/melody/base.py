@@ -163,3 +163,11 @@ class Melody:
         # TODO implement a divide and conquer or smth to find the best clef for each section of the melody
         warnings.warn(f"Melody span is too awkward to determine the best clef. Returning treble clef.")
         return M21TrebleClef.get()
+
+    def show(self, fmt = None):
+        """Shows the melody using music21"""
+        self._part.show(fmt=fmt)
+
+    def to_audio(self):
+        """Converts the melody to an audio signal"""
+        return self._part.to_audio()

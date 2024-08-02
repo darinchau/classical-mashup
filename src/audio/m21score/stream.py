@@ -1,19 +1,20 @@
 from typing import TypeVar, Generic, Iterable
 import tempfile
 import music21 as m21
-from music21.stream.base import Stream, Score, Part, Measure
+from music21.stream.base import Stream, Score, Part, Measure, Opus
 from music21.note import Note, Rest
 from music21.chord import Chord
 from music21.midi.translate import streamToMidiFile
 from .base import M21Wrapper, M21Object, IDType
 from .note import M21Note, M21Rest, M21Chord, _wrap_upcast
-from .util import wrap, play_binary_midi_m21, convert_midi_to_wav
+from .util import wrap, play_binary_midi_m21, convert_midi_to_wav, is_type_allowed, check_obj
 from ...util import is_ipython
 from ..audio import Audio
 from typing import Literal, Sequence
 
 GraceNoteType = Literal["grace", "nachschlagen"]
 class GraceNoteContext(Stream):
+    # A context to store grace notes. The implementation is similar to SpannerStorage
     def __init__(self, elements: Sequence[Note | Chord], parent: Note | Chord, _type: GraceNoteType, **keywords):
         self.parent = parent
         self._type = _type
@@ -29,11 +30,13 @@ class GraceNoteContext(Stream):
             raise ValueError(f"Unknown grace note type {self._type}")
 
     def _reprInternal(self):
+        # This is a hack to make the repr look nice
         tc = type(self.parent)
         return f'for {tc.__module__}.{tc.__qualname__}'
 
     def coreSelfActiveSite(self, el):
         # Never set the active site of a GraceNoteContext
+        # This overrides the default behavior of music21
         pass
 
     def coreStoreAtEnd(self, element, setActiveSite=True):
@@ -45,8 +48,8 @@ class GraceNoteContext(Stream):
             return
         super().replace(target, replacement, recurse=recurse, allDerived=allDerived)
 
-Q = TypeVar("Q", bound=Stream)
-class M21StreamWrapper(M21Wrapper[Q]):
+T = TypeVar("T", bound=Stream)
+class M21StreamWrapper(M21Wrapper[T]):
     """Wrapper for music21 Stream object. Provides methods to iterate over the stream."""
     def sanity_check(self):
         super().sanity_check()
@@ -100,24 +103,21 @@ class M21StreamWrapper(M21Wrapper[Q]):
 
 class M21Measure(M21StreamWrapper[Measure]):
     """Wrapper for a music21 Measure object"""
-    pass
+    @property
+    def bar_duration(self):
+        """Returns the duration of this measure
+
+        This is different from the duration of the object, since illegal/malformed measures can have its sum of its parts not equal to the whole.
+        Refer to the music21 documentation for more information."""
+        return self._data.barDuration
 
 
 class M21Part(M21StreamWrapper[Part]):
     """Wrapper for music21 Part object"""
     @classmethod
-    def parse(cls, path: str):
+    def parse(cls, path: str, *, sanitize: bool = True):
         """Read a music21 Stream object from an XML file or a MIDI file."""
-        # Purely for convenience
-        test_cases = {
-            "-test.prelude": "resources/scores/Prelude in C Major.mid",
-            "-test.1079": "resources/scores/Musical Offering BWV 1079.mxl"
-        }
-        if path in test_cases:
-            path = test_cases[path]
-        part = m21.converter.parse(path)
-        if not isinstance(part, Part):
-            raise ValueError(f"The file {path} is parsed as a {part.__class__.__name__}.")
+        part = _parse(path, Part, sanitize=sanitize)
         return cls(part)
 
     def measure(self, measure_number: int):
@@ -130,19 +130,9 @@ class M21Part(M21StreamWrapper[Part]):
 
 class M21Score(M21StreamWrapper[Score]):
     @classmethod
-    def parse(cls, path: str):
+    def parse(cls, path: str, *, sanitize: bool = True):
         """Read a music21 Stream object from an XML file or a MIDI file."""
-        # Purely for convenience
-        test_cases = {
-            "-test.prelude": "resources/scores/Prelude in C Major.mid",
-            "-test.1079": "resources/scores/Musical Offering BWV 1079.mxl"
-        }
-        if path in test_cases:
-            path = test_cases[path]
-        score = m21.converter.parse(path)
-        if not isinstance(score, Score):
-            raise ValueError(f"The file {path} is parsed as a {score.__class__.__name__}.")
-        return cls(score)
+        return cls(_parse(path, Score, sanitize=sanitize))
 
     def write_to_midi(self, path: str):
         """Write a music21 Stream object to a MIDI file."""
@@ -240,3 +230,39 @@ def _add_grace_note(new_stream: M21StreamWrapper, note: M21Note | M21Chord, grac
         sl = m21.spanner.Slur([gn._data for gn in grace_notes] + [copied_note._data])
         active_site.insert(0.0, sl)
     return copied_note, new_stream
+
+Q = TypeVar("Q", bound=Stream)
+def _parse(path: str, expected_type: type[Q], sanitize: bool = True) -> Q:
+    """Read a music21 Stream object from an XML file or a MIDI file."""
+    # Purely for convenience
+    test_cases = {
+        "-test.prelude": "resources/scores/Prelude in C Major.mid",
+        "-test.1079": "resources/scores/Musical Offering BWV 1079.mxl"
+    }
+    if path in test_cases:
+        path = test_cases[path]
+    stream = m21.converter.parse(path)
+    if not isinstance(stream, expected_type):
+        raise ValueError(f"The file {path} is parsed as a {stream.__class__.__name__}, expecting {expected_type}.")
+
+    if not sanitize:
+        return stream
+    return _sanitize_in_place(stream)
+
+def _sanitize_in_place(obj: Q) -> Q:
+    """Sanitize the music21 object in place. Returns the object itself for convenience. This function is not meant to be called directly."""
+    for el in obj.recurse():
+        if not is_type_allowed(el):
+            el.activeSite.remove(el)
+            continue
+        if not check_obj(el):
+            el.activeSite.remove(el)
+            continue
+    return obj
+
+_ALLOWED = [
+    (Measure, M21Measure),
+    (Part, M21Part),
+    (Score, M21Score),
+    (Stream, M21StreamWrapper)
+]

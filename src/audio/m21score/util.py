@@ -29,37 +29,30 @@ if TYPE_CHECKING:
     from .base import M21Wrapper
     from .stream import M21Score, M21Part
 
+def get_lookup() -> list[tuple[type[M21Object], type[M21Wrapper]]]:
+    """Returns a list of all the allowed classes and their corresponding wrapper classes"""
+    from .articulation import _ALLOWED as articulation_lookup
+    from .expressions import _ALLOWED as expression_lookup
+    from .symbol import _ALLOWED as symbol_lookup
+    from .note import _ALLOWED as note_lookup
+    from .stream import _ALLOWED as stream_lookup
+
+    return articulation_lookup + expression_lookup + symbol_lookup + note_lookup + stream_lookup
+
 T = TypeVar("T", bound=M21Object, covariant=True)
 def wrap(obj: T) -> M21Wrapper[T]:
     """Attempts to wrap a music21 object into a wrapper class in the best possible way.
     Not advisable to use this function directly. Use the wrapper classes directly instead."""
-    from . import (
-        M21Note, M21Rest, M21Chord, M21Part, M21Score, M21Measure, M21Interval, M21Key,
-        M21KeySignature, M21TimeSignature, M21StreamWrapper, M21Clef, M21Slur, M21Wrapper,
-        M21Tenuto, M21Accent, M21Staccato
-    )
-    class_lookup = [
-        (Note, M21Note),
-        (Rest, M21Rest),
-        (Chord, M21Chord),
-        (Part, M21Part),
-        (Score, M21Score),
-        (Measure, M21Measure),
-        (Interval, M21Interval),
-        (Key, M21Key),
-        (KeySignature, M21KeySignature),
-        (TimeSignature, M21TimeSignature),
-        (Slur, M21Slur),
-        (Clef, M21Clef),
-        (Tenuto, M21Tenuto),
-        (Accent, M21Accent),
-        (Staccato, M21Staccato),
-        (Stream, M21StreamWrapper)
-    ]
-    for cls, wrapper in class_lookup:
+    from .base import M21Wrapper
+    for cls, wrapper in get_lookup():
         if isinstance(obj, cls):
             return wrapper(obj)
     return M21Wrapper(obj)
+
+def is_type_allowed(obj: M21Object):
+    """Checks if the object is allowed to be wrapped"""
+    classes = tuple(cls for cls, _ in get_lookup())
+    return isinstance(obj, classes)
 
 def check_obj(obj: M21Object) -> bool:
     """Checks if the object is valid for use for our purposes, i.e. it fits in our restrictions"""
@@ -136,20 +129,25 @@ def float_to_fraction_time(f: OffsetQL, *, limit_denom: int = m21.defaults.limit
 
     return int(quotient) + remainder
 
-def load_from_corpus(corpus_name: str, movement_number: int | None = None, **kwargs) -> M21Score | M21Part:
+def load_from_corpus(corpus_name: str, movement_number: int | None = None, sanitize: bool = True, **kwargs) -> M21Score | M21Part:
     """Loads a piece from the music21 corpus"""
-    from .stream import M21Score, M21Part
+    from .stream import M21Score, M21Part, _sanitize_in_place
     corpus = m21.corpus.parse(corpus_name, movement_number, **kwargs)
+    if sanitize:
+        _sanitize_in_place(corpus)
     if isinstance(corpus, Score):
         return M21Score(corpus)
 
     assert isinstance(corpus, Part), f"Unexpected type: {type(corpus)}"
     return M21Part(corpus)
 
-def load_part_from_corpus(corpus_name: str, movement_number: int | None = None, **kwargs) -> M21Part:
+def load_part_from_corpus(corpus_name: str, movement_number: int | None = None, sanitize: bool = True, **kwargs) -> M21Part:
     """Loads a part from the music21 corpus. If it is a score, returns the first part"""
-    from .stream import M21Part
+    from .stream import M21Part, _sanitize_in_place
     corpus = m21.corpus.parse(corpus_name, movement_number, **kwargs)
+    if sanitize:
+        _sanitize_in_place(corpus)
+
     if isinstance(corpus, Score):
         return M21Part(corpus.parts[0])
 

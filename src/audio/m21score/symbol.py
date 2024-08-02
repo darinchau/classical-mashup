@@ -181,31 +181,6 @@ class M21Slur(M21Wrapper[Slur]):
         return self._data.isLast(obj._data)
 
 
-class M21Clef(M21Wrapper[Clef]):
-    def sanity_check(self):
-        super().sanity_check()
-        assert self._data.name in ('treble', 'bass'), f"Unknown clef found: {self._data.__class__.__name__}"
-
-    @property
-    def name(self):
-        """Returns the name """
-        n = self._data.name
-        if n == "treble":
-            return "treble"
-        if n == "bass":
-            return "bass"
-        raise ValueError(f"Unknown name for clef: {n}. Did you implicitly modify the clef?")
-
-    @property
-    def is_treble(self):
-        """Returns True if the clef is a treble clef"""
-        return self.name == "treble"
-
-    @property
-    def is_bass(self):
-        """Returns True if the clef is a bass clef"""
-        return self.name == "bass"
-
 class M21TrebleClef(M21Wrapper[TrebleClef]):
     def sanity_check(self):
         super().sanity_check()
@@ -282,3 +257,14 @@ class M21Dynamics(M21Wrapper[Dynamic]):
         if s not in M21Dynamics._VALUES:
             raise ValueError(f"Unknown dynamic value: {s}")
         return M21Dynamics(Dynamic(s))
+
+_ALLOWED = [
+    (TimeSignature, M21TimeSignature),
+    (KeySignature, M21KeySignature),
+    (Key, M21Key),
+    (Interval, M21Interval),
+    (Slur, M21Slur),
+    (TrebleClef, M21TrebleClef),
+    (BassClef, M21BassClef),
+    (Dynamic, M21Dynamics)
+]

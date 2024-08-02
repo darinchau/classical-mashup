@@ -230,3 +230,9 @@ class M21Rest(M21Wrapper[Rest]):
     def name(self):
         """Returns the full name of the Rest object"""
         return self._data.fullName
+
+_ALLOWED = [
+    (Note, M21Note),
+    (Chord, M21Chord),
+    (Rest, M21Rest)
+]

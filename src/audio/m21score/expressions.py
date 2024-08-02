@@ -11,7 +11,6 @@ from .symbol import M21Interval
 from abc import ABC, abstractmethod
 
 T = TypeVar("T", bound=Expression, covariant=True)
-
 class M21Expression(M21Wrapper[T]):
     """Represents an articulation object in music21. This class should be inherited by all articulation classes."""
     @property
@@ -162,3 +161,12 @@ class M21TextExpression(M21Expression[TextExpression]):
     @classmethod
     def from_text(cls, text: str) -> M21TextExpression:
         return cls(TextExpression(text))
+
+_ALLOWED = [
+    (Trill, M21Trill),
+    (Turn, M21Turn),
+    (Mordent, M21Mordent),
+    (InvertedMordent, M21Mordent),
+    (Fermata, M21Fermata),
+    (TextExpression, M21TextExpression)
+]

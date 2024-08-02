@@ -12,7 +12,6 @@ from typing import TypeVar
 from .base import M21Object, M21Wrapper
 
 T = TypeVar("T", bound=Articulation, covariant=True)
-
 class M21Articulation(M21Wrapper[T]):
     """Represents an articulation object in music21. This class should be inherited by all articulation classes."""
     def sanity_check(self):
@@ -40,3 +39,9 @@ class M21Staccato(M21Articulation[Staccato]):
 class M21Tenuto(M21Articulation[Tenuto]):
     """Represents a tenuto articulation"""
     pass
+
+_ALLOWED = [
+    (Accent, M21Accent),
+    (Staccato, M21Staccato),
+    (Tenuto, M21Tenuto)
+]

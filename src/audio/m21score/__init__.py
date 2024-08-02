@@ -5,7 +5,7 @@
 from .base import M21Wrapper
 from .note import M21Note, M21Chord, M21Rest
 from .stream import M21Part, M21Score, M21Measure, M21StreamWrapper
-from .symbol import M21TimeSignature, M21KeySignature, M21Key, M21Interval, M21Slur, M21Clef
+from .symbol import M21TimeSignature, M21KeySignature, M21Key, M21Interval, M21Slur
 from .articulation import M21Accent, M21Articulation, M21Staccato, M21Tenuto
 from .expressions import M21Expression, M21Fermata, M21Mordent, M21Trill, M21Turn, M21TextExpression
 from .util import load_from_corpus, load_part_from_corpus

@@ -205,6 +205,11 @@ class M21TrebleClef(M21Wrapper[TrebleClef]):
         """Returns the lowest line of the clef"""
         return self._data.lowestLine
 
+    @classmethod
+    def get(cls):
+        return cls(TrebleClef())
+
+
 class M21BassClef(M21Wrapper[BassClef]):
     def sanity_check(self):
         super().sanity_check()
@@ -228,6 +233,10 @@ class M21BassClef(M21Wrapper[BassClef]):
     def lowest_line(self):
         """Returns the lowest line of the clef"""
         return self._data.lowestLine
+
+    @classmethod
+    def get(cls):
+        return cls(BassClef())
 
 class M21Dynamics(M21Wrapper[Dynamic]):
     _VALUES = ("ppp", "ppp", "pp", "p", "mp", "mf", "f", "ff", "fff", "sf", "fp")

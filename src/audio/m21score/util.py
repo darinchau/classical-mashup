@@ -132,7 +132,7 @@ def float_to_fraction_time(f: OffsetQL, *, limit_denom: int = m21.defaults.limit
 
     return int(quotient) + remainder
 
-def load_from_corpus(corpus_name: str, movement_number: int | None = None, sanitize: bool = True, **kwargs) -> M21Score | M21Part:
+def load_score_from_corpus(corpus_name: str, movement_number: int | None = None, sanitize: bool = True, **kwargs) -> M21Score:
     """Loads a piece from the music21 corpus"""
     from .stream import M21Score, M21Part
     corpus = m21.corpus.parse(corpus_name, movement_number, **kwargs)
@@ -141,7 +141,7 @@ def load_from_corpus(corpus_name: str, movement_number: int | None = None, sanit
         return M21Score(corpus)
 
     assert isinstance(corpus, Part), f"Unexpected type: {type(corpus)}"
-    return M21Part(corpus)
+    return M21Score(Score([corpus]))
 
 def load_part_from_corpus(corpus_name: str, movement_number: int | None = None, sanitize: bool = True, **kwargs) -> M21Part:
     """Loads a part from the music21 corpus. If it is a score, returns the first part"""

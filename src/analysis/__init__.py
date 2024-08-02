@@ -7,3 +7,5 @@
 # Texture - Extract the texture of the score
 # Dynamics - Extract the dynamics of the score
 # Tempo - Extract the tempo of the score
+
+from .melody import Melody

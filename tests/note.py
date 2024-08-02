@@ -1,6 +1,7 @@
 # Basic tests about notes
 
 from src.audio.m21score import *
+from music21.note import Note
 from music21 import corpus, converter
 from src.analysis.melody.base import _sanitize
 

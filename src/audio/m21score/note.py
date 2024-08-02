@@ -7,6 +7,8 @@ from music21.chord import Chord
 from music21.common.types import StepName, OffsetQL
 from typing import Literal, Generic, TypeVar, Self
 from music21.duration import Duration, GraceDuration, AppoggiaturaDuration
+from music21.articulations import Articulation
+from music21.expressions import Expression
 from .util import wrap
 
 def _wrap_upcast(obj):
@@ -125,6 +127,16 @@ class M21NoteWrapper(M21Wrapper[T]):
         """Returns a list of expressions associated with the note"""
         return [wrap(x) for x in self._data.expressions]
 
+    def _sanitize_in_place(self):
+        from .articulation import _ALLOWED as _ALLOWED_ARTICULATION
+        from .expressions import _ALLOWED as _ALLOWED_EXPRESSION
+
+        allowed_articulation_cls = tuple(cls for cls, _ in _ALLOWED_ARTICULATION)
+        allowed_expression_cls = tuple(cls for cls, _ in _ALLOWED_EXPRESSION)
+
+        self._data.articulations = [a for a in self._data.articulations if isinstance(a, allowed_articulation_cls)] # type: ignore
+        self._data.expressions = [e for e in self._data.expressions if isinstance(e, allowed_expression_cls)] # type: ignore
+
 
 class M21Note(M21NoteWrapper[Note]):
     """Represents a music21 Note object with some convenience functions and properties. A note must be a 12-tone pitched note with a certain duration and within the midi range."""
@@ -231,8 +243,18 @@ class M21Rest(M21Wrapper[Rest]):
         """Returns the full name of the Rest object"""
         return self._data.fullName
 
-_ALLOWED = [
+    def _sanitize_in_place(self):
+        from .articulation import _ALLOWED as _ALLOWED_ARTICULATION
+        from .expressions import _ALLOWED as _ALLOWED_EXPRESSION
+
+        allowed_articulation_cls = tuple(cls for cls, _ in _ALLOWED_ARTICULATION)
+        allowed_expression_cls = tuple(cls for cls, _ in _ALLOWED_EXPRESSION)
+
+        self._data.articulations = [a for a in self._data.articulations if isinstance(a, allowed_articulation_cls)]
+        self._data.expressions = [e for e in self._data.expressions if isinstance(e, allowed_expression_cls)]
+
+_ALLOWED = (
     (Note, M21Note),
     (Chord, M21Chord),
     (Rest, M21Rest)
-]
+)

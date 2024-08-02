@@ -100,6 +100,17 @@ class M21StreamWrapper(M21Wrapper[T]):
         copied_note, stream = _add_grace_note(self.copy(), note, grace_notes, "nachschlagen", slur=False, appoggiatura=True, override_priority=override_priority)
         return stream
 
+    def _sanitize_in_place(self):
+        for el in self._data.recurse():
+            if not is_type_allowed(el):
+                el.activeSite.remove(el)
+                continue
+            if not check_obj(el):
+                el.activeSite.remove(el)
+                continue
+            wrap(el)._sanitize_in_place() # Sanitize child
+        return
+
 
 class M21Measure(M21StreamWrapper[Measure]):
     """Wrapper for a music21 Measure object"""
@@ -115,10 +126,9 @@ class M21Measure(M21StreamWrapper[Measure]):
 class M21Part(M21StreamWrapper[Part]):
     """Wrapper for music21 Part object"""
     @classmethod
-    def parse(cls, path: str, *, sanitize: bool = True):
+    def parse(cls, path: str):
         """Read a music21 Stream object from an XML file or a MIDI file."""
-        part = _parse(path, Part, sanitize=sanitize)
-        return cls(part)
+        return cls(_parse(path, Part))
 
     def measure(self, measure_number: int):
         """Grabs a single measure specified by measure number"""
@@ -130,9 +140,9 @@ class M21Part(M21StreamWrapper[Part]):
 
 class M21Score(M21StreamWrapper[Score]):
     @classmethod
-    def parse(cls, path: str, *, sanitize: bool = True):
+    def parse(cls, path: str):
         """Read a music21 Stream object from an XML file or a MIDI file."""
-        return cls(_parse(path, Score, sanitize=sanitize))
+        return cls(_parse(path, Score))
 
     def write_to_midi(self, path: str):
         """Write a music21 Stream object to a MIDI file."""
@@ -232,7 +242,7 @@ def _add_grace_note(new_stream: M21StreamWrapper, note: M21Note | M21Chord, grac
     return copied_note, new_stream
 
 Q = TypeVar("Q", bound=Stream)
-def _parse(path: str, expected_type: type[Q], sanitize: bool = True) -> Q:
+def _parse(path: str, expected_type: type[Q]) -> Q:
     """Read a music21 Stream object from an XML file or a MIDI file."""
     # Purely for convenience
     test_cases = {
@@ -245,24 +255,11 @@ def _parse(path: str, expected_type: type[Q], sanitize: bool = True) -> Q:
     if not isinstance(stream, expected_type):
         raise ValueError(f"The file {path} is parsed as a {stream.__class__.__name__}, expecting {expected_type}.")
 
-    if not sanitize:
-        return stream
-    return _sanitize_in_place(stream)
+    return stream
 
-def _sanitize_in_place(obj: Q) -> Q:
-    """Sanitize the music21 object in place. Returns the object itself for convenience. This function is not meant to be called directly."""
-    for el in obj.recurse():
-        if not is_type_allowed(el):
-            el.activeSite.remove(el)
-            continue
-        if not check_obj(el):
-            el.activeSite.remove(el)
-            continue
-    return obj
-
-_ALLOWED = [
+_ALLOWED = (
     (Measure, M21Measure),
     (Part, M21Part),
     (Score, M21Score),
     (Stream, M21StreamWrapper)
-]
+)

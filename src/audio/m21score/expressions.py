@@ -162,11 +162,11 @@ class M21TextExpression(M21Expression[TextExpression]):
     def from_text(cls, text: str) -> M21TextExpression:
         return cls(TextExpression(text))
 
-_ALLOWED = [
+_ALLOWED = (
     (Trill, M21Trill),
     (Turn, M21Turn),
     (Mordent, M21Mordent),
     (InvertedMordent, M21Mordent),
     (Fermata, M21Fermata),
     (TextExpression, M21TextExpression)
-]
+)

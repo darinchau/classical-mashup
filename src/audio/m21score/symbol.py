@@ -258,7 +258,7 @@ class M21Dynamics(M21Wrapper[Dynamic]):
             raise ValueError(f"Unknown dynamic value: {s}")
         return M21Dynamics(Dynamic(s))
 
-_ALLOWED = [
+_ALLOWED = (
     (TimeSignature, M21TimeSignature),
     (KeySignature, M21KeySignature),
     (Key, M21Key),
@@ -267,4 +267,4 @@ _ALLOWED = [
     (TrebleClef, M21TrebleClef),
     (BassClef, M21BassClef),
     (Dynamic, M21Dynamics)
-]
+)

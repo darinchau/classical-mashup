@@ -40,8 +40,8 @@ class M21Tenuto(M21Articulation[Tenuto]):
     """Represents a tenuto articulation"""
     pass
 
-_ALLOWED = [
+_ALLOWED = (
     (Accent, M21Accent),
     (Staccato, M21Staccato),
     (Tenuto, M21Tenuto)
-]
+)

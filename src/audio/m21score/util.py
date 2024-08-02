@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from .base import M21Wrapper
     from .stream import M21Score, M21Part
 
-def get_lookup() -> list[tuple[type[M21Object], type[M21Wrapper]]]:
+def get_lookup() -> tuple[tuple[type[M21Object], type[M21Wrapper]], ...]:
     """Returns a list of all the allowed classes and their corresponding wrapper classes"""
     from .articulation import _ALLOWED as articulation_lookup
     from .expressions import _ALLOWED as expression_lookup
@@ -51,7 +51,8 @@ def wrap(obj: T) -> M21Wrapper[T]:
 
 def is_type_allowed(obj: M21Object):
     """Checks if the object is allowed to be wrapped"""
-    classes = tuple(cls for cls, _ in get_lookup())
+    from .stream import GraceNoteContext
+    classes = tuple(cls for cls, _ in get_lookup()) + (GraceNoteContext,)
     return isinstance(obj, classes)
 
 def check_obj(obj: M21Object) -> bool:
@@ -131,10 +132,9 @@ def float_to_fraction_time(f: OffsetQL, *, limit_denom: int = m21.defaults.limit
 
 def load_from_corpus(corpus_name: str, movement_number: int | None = None, sanitize: bool = True, **kwargs) -> M21Score | M21Part:
     """Loads a piece from the music21 corpus"""
-    from .stream import M21Score, M21Part, _sanitize_in_place
+    from .stream import M21Score, M21Part
     corpus = m21.corpus.parse(corpus_name, movement_number, **kwargs)
-    if sanitize:
-        _sanitize_in_place(corpus)
+
     if isinstance(corpus, Score):
         return M21Score(corpus)
 
@@ -143,10 +143,8 @@ def load_from_corpus(corpus_name: str, movement_number: int | None = None, sanit
 
 def load_part_from_corpus(corpus_name: str, movement_number: int | None = None, sanitize: bool = True, **kwargs) -> M21Part:
     """Loads a part from the music21 corpus. If it is a score, returns the first part"""
-    from .stream import M21Part, _sanitize_in_place
+    from .stream import M21Part
     corpus = m21.corpus.parse(corpus_name, movement_number, **kwargs)
-    if sanitize:
-        _sanitize_in_place(corpus)
 
     if isinstance(corpus, Score):
         return M21Part(corpus.parts[0])

@@ -39,6 +39,10 @@ class M21Wrapper(Generic[T]):
             pass
         self._checked = True
 
+    def _sanitize_in_place(self):
+        """Sanitize the object. This method should be overridden by subclasses."""
+        pass
+
     def __eq__(self, value) -> bool:
         if isinstance(value, M21Wrapper):
             return self._data == value._data

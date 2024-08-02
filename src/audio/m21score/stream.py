@@ -122,6 +122,12 @@ class M21Measure(M21StreamWrapper[Measure]):
         Refer to the music21 documentation for more information."""
         return self._data.barDuration
 
+    def _sanitize_in_place(self):
+        super()._sanitize_in_place()
+        if self._data.leftBarline is not None:
+            wrap(self._data.leftBarline)._sanitize_in_place()
+        if self._data.rightBarline is not None:
+            wrap(self._data.rightBarline)._sanitize_in_place()
 
 class M21Part(M21StreamWrapper[Part]):
     """Wrapper for music21 Part object"""

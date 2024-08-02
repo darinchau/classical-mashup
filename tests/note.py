@@ -66,3 +66,19 @@ def test_sanitize_basic():
     idx = 0
     assert p._data.recurse()[idx].__class__.__name__ == "Instrument"
     assert s._data.recurse()[idx].__class__.__name__ != "Instrument"
+
+def test_sanitize_grace_note():
+    part = M21Part.parse("tinynotation: 4/4 c4 d e f g a b c' b a g2")
+
+    part._sanitize_in_place()
+
+    n =  part.notes[0]
+    gn = M21Note.from_name("F#").set_duration(1/2)
+
+    part2 = part.add_grace_note(n, [
+        gn,
+    ])
+
+    assert part2.notes[0] == gn
+    part2._sanitize_in_place()
+    assert part2.notes[0] == gn

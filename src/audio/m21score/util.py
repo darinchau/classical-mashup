@@ -36,8 +36,10 @@ def get_lookup() -> tuple[tuple[type[M21Object], type[M21Wrapper]], ...]:
     from .symbol import _ALLOWED as symbol_lookup
     from .note import _ALLOWED as note_lookup
     from .stream import _ALLOWED as stream_lookup
+    from .barline import _ALLOWED as barline_lookup
+    from .instrument import _ALLOWED as instrument_lookup
 
-    return articulation_lookup + expression_lookup + symbol_lookup + note_lookup + stream_lookup
+    return articulation_lookup + expression_lookup + symbol_lookup + note_lookup + stream_lookup + barline_lookup + instrument_lookup
 
 T = TypeVar("T", bound=M21Object, covariant=True)
 def wrap(obj: T) -> M21Wrapper[T]:

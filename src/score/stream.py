@@ -8,7 +8,7 @@ from music21.midi.translate import streamToMidiFile
 from .base import M21Wrapper, M21Object, IDType
 from .note import M21Note, M21Rest, M21Chord, _wrap_upcast
 from .util import wrap, play_binary_midi_m21, convert_midi_to_wav, is_type_allowed, check_obj
-from ...util import is_ipython
+from ..util import is_ipython
 from ..audio import Audio
 from typing import Literal, Sequence
 

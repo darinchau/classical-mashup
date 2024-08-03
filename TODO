@@ -2,3 +2,4 @@ Maybe future me can think about how to hook the code to a vst
 Midi to audio collection, each track its own separate thing?
 Normalize midi volume
 Barlines, Metronome marks
+Support for m21.layout.StaffGroup (which makes the barlines and stuff nicer)

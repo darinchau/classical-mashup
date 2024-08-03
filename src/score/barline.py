@@ -13,7 +13,7 @@ class M21Barline(M21Wrapper[Barline]):
 
     def _sanitize_in_place(self):
         if self._data.type not in self._ALLOWED_TYPES:
-            self._data = Barline('regular')
+            self._data.type = "regular"
         if isinstance(self._data, Repeat):
             self._data.times = 2
         return self

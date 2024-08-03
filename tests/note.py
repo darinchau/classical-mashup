@@ -1,6 +1,6 @@
 # Basic tests about notes
 
-from src.audio.m21score import *
+from src.score import *
 from src.analysis.melody import Melody
 from music21.note import Note
 from music21.stream.base import Part
@@ -91,3 +91,9 @@ def test_sanitize_strip_ties():
     assert isinstance(part, Part)
     m = Melody(M21Part(part))
     assert len(m._part.notes) == 4
+
+def test_sanitize_bar_line():
+    s = M21Score.parse("-test.1079")
+    s.parts[0].measure(2)._data.rightBarline = 'none'
+    assert s.parts[0].measure(2)._data.rightBarline.type == 'none'
+    assert s.sanitize().parts[0].measure(2)._data.rightBarline.type == 'regular'

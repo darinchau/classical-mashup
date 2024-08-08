@@ -1,6 +1,6 @@
 import music21 as m21
 import copy
-from ...score import (
+from ..score import (
     M21Wrapper, M21Note, M21Chord, M21Rest, M21Part, M21Score, M21Measure, M21StreamWrapper,
     M21TimeSignature, M21KeySignature, M21Key, M21Interval, M21Slur, M21BassClef, M21Dynamics, M21TrebleClef,
     M21Object
@@ -12,7 +12,7 @@ from music21.chord import Chord
 from music21.key import KeySignature
 from music21.meter.base import TimeSignature
 from music21.pitch import Pitch
-from ...score.util import check_obj as _check_obj
+from ..score.util import check_obj as _check_obj
 from typing import TypeVar
 import warnings
 

@@ -254,14 +254,6 @@ class M21Score(M21StreamWrapper[Score]):
         """Returns the number of parts in this score"""
         return len(self._data.parts)
 
-    def measure(self, measure_number: int):
-        """Grabs a single measure specified by measure number"""
-        return M21Score(self._data.measure(measure_number))
-
-    def measure_range(self, start: int, end: int):
-        """Grabs a range of measure specified by measure number"""
-        return M21Score(self._data.measures(start, end))
-
     def measure_numbers(self):
         """Returns a list of measure numbers in the score. This list must be sorted"""
         measure_numbers: set[int] = set()
@@ -279,6 +271,15 @@ class M21Score(M21StreamWrapper[Score]):
         if not m:
             return False
         return m[0] == 0
+
+    def get_measure(self, part_idx: int, measure_number: int) -> M21Measure:
+        """Grabs a single measure specified by measure number"""
+        if measure_number not in self.measure_numbers():
+            raise ValueError(f"Measure {measure_number} does not exist in the score.")
+        m = self._data.parts[part_idx].measure(measure_number)
+        if m is None:
+            raise ValueError(f"Measure {measure_number} does not exist in the score.")
+        return M21Measure(m)
 
 def _add_grace_note(new_stream: M21StreamWrapper, note: M21Note | M21Chord, grace_notes: Iterable[M21Note | M21Chord], _type: GraceNoteType, *,
                    slur: bool = True,

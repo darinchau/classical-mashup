@@ -6,8 +6,18 @@ from src.score import M21Object, M21Part
 from music21.note import GeneralNote
 from src.score import M21StreamWrapper, M21Measure
 from music21.common.types import OffsetQL
+from fractions import Fraction
+from src.score.util import float_to_fraction_time
 
-NoteHead = m21.note.Note | m21.note.Rest | m21.chord.Chord
+class MergeViolation(Exception):
+    """Reports a violation in the merging of two measures"""
+    pass
+
+class NoteGroup:
+    isRest = False
+
+    def __init__(self, notes: list[m21.note.Note | m21.chord.Chord | m21.note.Rest]):
+        self.notes = notes
 
 # Assume the following rule:
 # If at the same bar, all 4 voices are active, then voices 2 and 3 becomes the alto voice
@@ -16,7 +26,7 @@ NoteHead = m21.note.Note | m21.note.Rest | m21.chord.Chord
 # becomes the bass.
 # Try to merge the voices according to this rule. If the merge is successful, then it is practically
 # a 3 part score. If not, then it is a 4 part score.
-def measures_all_rest(m: Measure):
+def measures_all_rest(m: Measure) -> bool:
     """Returns True if all notes in the measure are rests"""
     cum_dur = 0.
     for n in m.notesAndRests:
@@ -25,7 +35,7 @@ def measures_all_rest(m: Measure):
         cum_dur += n.duration.quarterLength
     return cum_dur == m.barDuration.quarterLength
 
-def fix_rest_and_clef(parts: list[M21Part]):
+def fix_rest_and_clef(parts: list[M21Part], *, inPlace: bool = False):
     """Fixes the rests and clefs in the parts. This function will:
     - Replace measures that are entirely rests with a single rest that spans the entire measure
     - Replace the clef with the best clef for the part
@@ -34,7 +44,10 @@ def fix_rest_and_clef(parts: list[M21Part]):
     n_parts = len(parts)
 
     for i in range(n_parts):
-        parts[i]._sanitize_in_place()
+        if not inPlace:
+            parts[i] = parts[i].sanitize()
+        else:
+            parts[i]._sanitize_in_place()
         parts[i]._data.makeRests(inPlace=True, fillGaps=True)
 
         data = parts[i]._data
@@ -58,28 +71,28 @@ def fix_rest_and_clef(parts: list[M21Part]):
 
     return M21Score(new_score)
 
-def offset_to_score(obj: NoteHead, score: M21Score):
+def offset_to_score(obj: M21Object, score: M21Score):
     """Get the offset of the object in the score"""
     cum = 0.
-    x: M21Object = obj
+    x = obj
     while x.activeSite is not None:
         cum += x.offset
         x = x.activeSite
         if x is score._data:
-            break
-    return cum
+            return cum
+    raise ValueError(f"Object {obj} is not in the score")
 
-def get_part(obj: NoteHead, score: M21Score) -> str | None:
+def get_part(obj: M21Object, score: M21Score | None = None) -> str | None:
     """Get the part of the object in the score"""
-    x: M21Object = obj
+    x = obj
     while x.activeSite is not None:
         x = x.activeSite
         if isinstance(x, Part):
             return str(x.id)
-        if x is score._data:
+        if score is None or x is score._data:
             # We have reached the top of the active site hierarchy
             break
-    return None
+    raise ValueError(f"Object {obj} is not in the score")
 
 def get_part_offset_event(new_score: M21Score):
     """Get the events in each part at each offset. Returns a dictionary where the keys are the part names
@@ -90,11 +103,11 @@ def get_part_offset_event(new_score: M21Score):
 
     # At offset = offset, what is happening in each part?
     # We will store this information in a sorted list to query efficiently.
-    part_offset_events: dict[str, list[tuple[float, NoteHead]]] = {part_name: [] for part_name in part_lookup}
+    part_offset_events: dict[str, list[tuple[float, m21.note.Note | m21.note.Rest | m21.chord.Chord]]] = {part_name: [] for part_name in part_lookup}
     for x in new_score._data.recurse().getElementsByClass([
         m21.note.Note, m21.note.Rest, m21.chord.Chord
     ]):
-        x: NoteHead
+        assert isinstance(x, (m21.note.Note, m21.note.Rest, m21.chord.Chord))
         part_of_x = get_part(x, new_score)
         if part_of_x is None:
             continue
@@ -105,9 +118,9 @@ def get_part_offset_event(new_score: M21Score):
 
     return part_offset_events
 
-def get_offset_to_site(obj: GeneralNote, site: M21StreamWrapper) -> float | None:
+def get_offset_to_site(obj: GeneralNote, site: M21StreamWrapper) -> OffsetQL | None:
     x: M21Object = obj
-    offset = 0.
+    offset = Fraction()
     while x.activeSite is not None:
         offset += x.offset
         x = x.activeSite
@@ -115,7 +128,7 @@ def get_offset_to_site(obj: GeneralNote, site: M21StreamWrapper) -> float | None
             return offset
     return None
 
-def get_note_on_or_before_offset(target_offset: float, measure: M21Measure):
+def get_note_on_or_before_offset(target_offset: OffsetQL, measure: M21Measure):
     notes = measure._data.recurse().getElementsByClass([
         m21.note.Note, m21.note.Rest, m21.chord.Chord
     ]).matchingElements()
@@ -129,20 +142,21 @@ def get_note_on_or_before_offset(target_offset: float, measure: M21Measure):
             return note, offset
     return None, None
 
-class MergeViolation(Exception):
-    """Reports a violation in the merging of two measures"""
-    pass
-
-def merge_measures(measure1: M21Measure, measure2: M21Measure):
+def merge_measures(measure1: M21Measure, measure2: M21Measure, *, tuplet_upper_bound: int = 41):
     """Merge two measures together. The measures must be of the same length. We will report a merge violation if
     two simultaneous notes that are not rests and have different durations"""
+    # TODO Add a shortcut where if one of the bar has a bar rest then clone and return the other bar directly
     merged_part = measure1._data.cloneEmpty("merge_measures")
-    offset = 0.
+    offset = Fraction()
     while offset < measure1.bar_duration.quarterLength:
         note1, offset1 = get_note_on_or_before_offset(offset, measure1)
         note2, offset2 = get_note_on_or_before_offset(offset, measure2)
         if note1 is None or note2 is None or offset1 is None or offset2 is None:
             break
+
+        # Convert to fractions because otherwise floating point antics might happen
+        offset1 = float_to_fraction_time(offset1, limit_denom=tuplet_upper_bound)
+        offset2 = float_to_fraction_time(offset2, limit_denom=tuplet_upper_bound)
 
         # Do a small sanity check: if offset is at 0, then both offsets should be 0
         if offset == 0:
@@ -191,8 +205,49 @@ def merge_measures(measure1: M21Measure, measure2: M21Measure):
             merged_part.insert(offset, note1)
 
         # Increment the offset
-        next_measure1_event = offset1 + note1.duration.quarterLength
-        next_measure2_event = offset2 + note2.duration.quarterLength
+        next_measure1_event = offset1 + float_to_fraction_time(note1.duration.quarterLength, limit_denom=tuplet_upper_bound)
+        next_measure2_event = offset2 + float_to_fraction_time(note2.duration.quarterLength, limit_denom=tuplet_upper_bound)
         offset = min(next_measure1_event, next_measure2_event)
 
-    return merged_part
+    return M21Measure(merged_part)
+
+def separate_voices(score: M21Score):
+    parts = M21Score(score.sanitize()._data.voicesToParts()).sanitize().parts
+    new_score = fix_rest_and_clef(parts)
+
+    # TODO support other number of parts
+    if len(parts) in (2, 3):
+        return new_score
+    if len(parts) != 4:
+        raise ValueError("Expected 2, 3, or 4 parts")
+
+    # Check that the notes indeed add up to the total length of the score
+    # aka all rests are properly placed
+    part_offset_events = get_part_offset_event(new_score)
+    assert all(
+        max(offset + note.quarterLength for offset, note in part_offset_events[part]) == new_score.quarter_length for part in part_offset_events
+    )
+
+    soprano = new_score.parts[0]._data.cloneEmpty("separate_voices")
+    alto = new_score.parts[1]._data.cloneEmpty("separate_voices")
+    bass = new_score.parts[2]._data.cloneEmpty("separate_voices")
+
+    try:
+        for i in new_score.measure_numbers():
+            offset = offset_to_score(new_score.parts[0].measure(i)._data, new_score)
+            soprano.insert(offset, new_score.get_measure(0, i)._data)
+            if not measures_all_rest(new_score.get_measure(3, i)._data):
+                measure1 = new_score.get_measure(1, i)
+                measure2 = new_score.get_measure(2, i)
+                merged_measure = merge_measures(measure1, measure2)
+                alto.insert(offset, merged_measure._data)
+                bass.insert(offset, new_score.get_measure(3, i)._data)
+            else:
+                alto.insert(offset, new_score.get_measure(1, i)._data)
+                bass.insert(offset, new_score.get_measure(2, i)._data)
+    except MergeViolation as e:
+        # If there is a merge violation, then we will just return the original parts
+        # Fix again just in case we accidentally modified the original parts
+        return fix_rest_and_clef(parts)
+
+    return fix_rest_and_clef([M21Part(soprano), M21Part(alto), M21Part(bass)])

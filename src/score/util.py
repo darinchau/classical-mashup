@@ -110,14 +110,20 @@ def convert_midi_to_wav(input_path: str, output_path: str, soundfont_path="~/.fl
         stdout=subprocess.DEVNULL if not verbose else None,
         stderr=subprocess.DEVNULL if not verbose else None)
 
-def float_to_fraction_time(f: OffsetQL, *, limit_denom: int = m21.defaults.limitOffsetDenominator) -> Fraction:
+def float_to_fraction_time(f: OffsetQL, *, limit_denom: int = m21.defaults.limitOffsetDenominator, eps: float = 1e-6) -> Fraction:
     """Turn a float into a fraction
     limit_denom (int): Limits the denominator to be less than or equal to limit_denom
 
     Code referenced from music21.common.numberTools"""
     if not isinstance(f, Fraction):
         quotient, remainder = divmod(float(f), 1.)
-        remainder = Fraction(remainder).limit_denominator(limit_denom)
+
+        # Convert and check if the conversion is accurate. If it is not, then there are no matches
+        rem = Fraction(remainder).limit_denominator(limit_denom)
+        if abs(remainder - rem) > eps:
+            raise ValueError(f"Could not convert {f} to a fraction with denominator limited to {limit_denom}")
+        remainder = rem
+
         if quotient < -1:
             quotient += 1
             remainder = 1 - remainder

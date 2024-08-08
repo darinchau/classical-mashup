@@ -11,6 +11,7 @@ from .util import wrap, play_binary_midi_m21, convert_midi_to_wav, is_type_allow
 from ..util import is_ipython
 from ..audio import Audio
 from typing import Literal, Sequence
+import copy
 
 GraceNoteType = Literal["grace", "nachschlagen"]
 class GraceNoteContext(Stream):
@@ -101,7 +102,11 @@ class M21StreamWrapper(M21Wrapper[T]):
         return stream
 
     def _sanitize_in_place(self):
-        self._data.stripTies(inPlace = True)
+        # This seems to lead to weird behavior
+        # TODO investigate about this tying over bars and measures
+        # case in point test 1079 measure 15
+        # self._data.stripTies(inPlace = True)
+        # self._data.makeTies(inPlace = True)
         for el in self._data.iter():
             if not is_type_allowed(el):
                 el.activeSite.remove(el)
@@ -151,7 +156,9 @@ class M21Measure(M21StreamWrapper[Measure]):
 
         This is different from the duration of the object, since illegal/malformed measures can have its sum of its parts not equal to the whole.
         Refer to the music21 documentation for more information."""
-        return self._data.barDuration
+        x = self._data.barDuration
+        assert isinstance(x, m21.duration.Duration)
+        return copy.deepcopy(x)
 
     def _sanitize_in_place(self):
         super()._sanitize_in_place()

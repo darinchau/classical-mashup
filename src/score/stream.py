@@ -146,6 +146,13 @@ class M21StreamWrapper(M21Wrapper[T]):
 
         return binary_midi_data
 
+    def _normalize_audio_in_place(self):
+        """Make all the notes in the stream have the same volume. Returns self"""
+        for n in self._data.recurse().getElementsByClass((Note, Chord)):
+            assert isinstance(n, (Note, Chord))
+            n.volume = 0.5
+        return self
+
     def to_audio(self,
                  sample_rate: int = 44100,
                  soundfont_path: str = "~/.fluidsynth/default_sound_font.sf2",
@@ -155,7 +162,7 @@ class M21StreamWrapper(M21Wrapper[T]):
             tempfile.NamedTemporaryFile(suffix=".mid") as f1,
             tempfile.NamedTemporaryFile(suffix=".wav") as f2
         ):
-            self.write_to_midi(f1.name)
+            self.copy()._normalize_audio_in_place(). write_to_midi(f1.name)
             convert_midi_to_wav(f1.name, f2.name, soundfont_path, sample_rate, verbose)
             return Audio.load(f2.name)
 

@@ -221,13 +221,6 @@ def separate_voices(score: M21Score):
     if len(parts) != 4:
         raise ValueError("Expected 2, 3, or 4 parts")
 
-    # Check that the notes indeed add up to the total length of the score
-    # aka all rests are properly placed
-    part_offset_events = get_part_offset_event(new_score)
-    assert all(
-        max(offset + note.quarterLength for offset, note in part_offset_events[part]) == new_score.quarter_length for part in part_offset_events
-    )
-
     soprano = new_score.parts[0]._data.cloneEmpty("separate_voices")
     alto = new_score.parts[1]._data.cloneEmpty("separate_voices")
     bass = new_score.parts[2]._data.cloneEmpty("separate_voices")

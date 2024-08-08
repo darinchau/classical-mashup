@@ -4,5 +4,4 @@ Normalize midi volume
 Barlines, Metronome marks
 Support for m21.layout.StaffGroup (which makes the barlines and stuff nicer)
 Fix beaming of expanded voice
-Check the notes in the measure indeed add up to the measure length
-and no overlapped notes
+Check the notes in the measure indeed add up to the measure length and no overlapped notes

@@ -1,10 +1,21 @@
 from typing import TypeVar, Generic, Iterable
 import tempfile
 import music21 as m21
-from music21.stream.base import Stream, Score, Part, Measure, Opus
-from music21.note import Note, Rest
+from music21.articulations import Articulation
+from music21.bar import Barline
+from music21.base import Music21Object as M21Object
+from music21.dynamics import Dynamic
+from music21.instrument import Instrument
+from music21.stream.base import Stream, Score, Part, Measure, Opus, Voice, PartStaff
+from music21.note import Note, Rest, GeneralNote
 from music21.chord import Chord
+from music21.meter.base import TimeSignature
 from music21.midi.translate import streamToMidiFile
+from music21.duration import Duration
+from music21.common.types import OffsetQL, StepName
+from music21.key import KeySignature, Key
+from music21.interval import Interval
+from music21.clef import Clef
 from .base import M21Wrapper, M21Object, IDType
 from .note import M21Note, M21Rest, M21Chord, _wrap_upcast
 from .util import wrap, play_binary_midi_m21, convert_midi_to_wav, is_type_allowed, check_obj
@@ -183,6 +194,46 @@ class M21Part(M21StreamWrapper[Part]):
 
 
 class M21Score(M21StreamWrapper[Score]):
+    """A score is a special wrapper for a music21 Score object. A score must contain parts which contain measures.
+    This wrapper provides methods to access the parts and measures of the score.
+
+    Score parts can additionally contain instruments since this seems to be a common use case in music21.
+
+    Maybe we will support those 1-2 repeats in the future, but for now assume no repeats"""
+    def sanity_check(self):
+        super().sanity_check()
+        # A score can only contain parts
+        # More accurately, it can only contain parts and metadata
+        for part in self._data.iter():
+            assert not isinstance(part, (
+                Articulation, Barline, Clef, Dynamic, KeySignature, TimeSignature, GeneralNote,
+                Instrument, Interval, Voice, Score, Measure, Opus
+            )), f"Score can only contain parts and other special objects, not {part.__class__.__name__}"
+
+            if isinstance(part, Part):
+                for measure in part.iter():
+                    assert not isinstance(measure, (
+                        Articulation, Barline, Dynamic, GeneralNote, Interval, Voice, Score, Opus
+                    )), f"Parts inside a score can only contain measures and other special objects, not {measure.__class__.__name__}"
+
+        # Check the well-orderedness of measures
+        # Skip this check if there are no measures
+        measure_numbers = set(self.measure_numbers())
+
+        if self.has_pickup:
+            assert len(measure_numbers) > 1, "Score must have at least one measure"
+            assert measure_numbers == set(range(max(measure_numbers) + 1)), "Measure numbers must be contiguous"
+        elif len(measure_numbers) > 0:
+            assert measure_numbers == set(range(1, max(measure_numbers) + 1)), "Measure numbers must be contiguous"
+
+        for part in self._data.iter():
+            if isinstance(part, Part):
+                part_measure_number: set[int] = set()
+                for measure in part.iter():
+                    if isinstance(measure, Measure):
+                        part_measure_number.add(measure.number)
+                assert part_measure_number == measure_numbers, f"Part {part.id} does not have the same measure numbers as the score. {part_measure_number ^ measure_numbers}"
+
     @classmethod
     def parse(cls, path: str):
         """Read a music21 Stream object from an XML file or a MIDI file."""
@@ -198,13 +249,36 @@ class M21Score(M21StreamWrapper[Score]):
         """Returns the parts of the score as a list of Parts wrapper."""
         return [M21Part(x) for x in self._data.parts]
 
+    @property
+    def nparts(self):
+        """Returns the number of parts in this score"""
+        return len(self._data.parts)
+
     def measure(self, measure_number: int):
         """Grabs a single measure specified by measure number"""
         return M21Score(self._data.measure(measure_number))
 
-    def measures(self, start: int, end: int):
+    def measure_range(self, start: int, end: int):
         """Grabs a range of measure specified by measure number"""
         return M21Score(self._data.measures(start, end))
+
+    def measure_numbers(self):
+        """Returns a list of measure numbers in the score. This list must be sorted"""
+        measure_numbers: set[int] = set()
+        for part in self._data.parts:
+            for measure in part:
+                if isinstance(measure, Measure):
+                    measure_numbers.add(measure.number)
+        assert all(x >= 0 for x in measure_numbers), "Measure numbers must be non-negative"
+        return sorted(measure_numbers)
+
+    @property
+    def has_pickup(self):
+        """Returns True if the score has a pickup measure"""
+        m = self.measure_numbers()
+        if not m:
+            return False
+        return m[0] == 0
 
 def _add_grace_note(new_stream: M21StreamWrapper, note: M21Note | M21Chord, grace_notes: Iterable[M21Note | M21Chord], _type: GraceNoteType, *,
                    slur: bool = True,

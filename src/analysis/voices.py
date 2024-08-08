@@ -52,11 +52,11 @@ def fix_rest_and_clef(parts: list[M21Part]):
             data.remove(existing_clef[0])
         data.insert(0, clef)
 
-    new_score = M21Score(Score())
+    new_score = Score()
     for part in parts:
-        new_score._data.insert(0., part.sanitize()._data)
+        new_score.insert(0., part.sanitize()._data)
 
-    return new_score
+    return M21Score(new_score)
 
 def offset_to_score(obj: NoteHead, score: M21Score):
     """Get the offset of the object in the score"""

@@ -7,7 +7,9 @@ from music21.note import Note
 from music21.stream.base import Part, Measure, Score
 from music21.meter.base import TimeSignature
 from music21 import corpus, converter
-from src.analysis.melody import _sanitize
+from src.analysis.melody import _sanitize_as_melody
+from src.analysis.voices import separate_voices, measures_all_rest
+import numpy as np
 
 def test_note_transposition():
     # Tests the transposition of notes
@@ -37,10 +39,10 @@ def test_get_next_note():
     assert s.notes[3].get_next_note() == s.notes[4]
     assert s.notes[5].get_next_note() == s.notes[6]
 
-def test_sanitize_basic():
+def test_sanitize_melody():
     # Tests the basic functionality of the sanitize function for a melody
     p = load_part_from_corpus('bach/bwv66.6')
-    s = _sanitize(p)
+    s = _sanitize_as_melody(p)
 
     idx = 0
     assert p._data.recurse()[idx].__class__.__name__ == "Instrument"
@@ -85,3 +87,15 @@ def test_sanitize_measure_numbers():
 
     s._fix_measure_numbers_in_place()
     s._check_measure_numbers()
+
+def test_sanitize_grace_note_2():
+    s = M21Score.parse("-test.1079")
+    s._sanitize_in_place()
+    arr = s.get_note_array()
+    assert np.all(arr['is_grace'] == 0)
+
+def test_separate_voices():
+    s = M21Score.parse("-test.1079")
+    s._sanitize_in_place()
+    s2 = separate_voices(s)
+    assert len(list(s2._data)) == 3

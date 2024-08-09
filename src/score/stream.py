@@ -283,8 +283,22 @@ class M21Score(M21StreamWrapper[Score]):
     def _convert_to_partitura(self):
         """Convert the score to a Partitura object."""
         import partitura as pt
+
+        # The load_music21 method doesnt seem to work properly. This is more consistent
         tmp_path = self._data.write("musicxml")
         return pt.load_score(tmp_path)
+
+    def get_note_array(self):
+        import partitura as pt
+        extended_score_note_array = pt.utils.music.ensure_notearray(
+            self._convert_to_partitura(),
+            include_pitch_spelling=True, # adds 3 fields: step, alter, octave
+            include_key_signature=True, # adds 2 fields: ks_fifths, ks_mode
+            include_time_signature=True, # adds 2 fields: ts_beats, ts_beat_type
+            include_metrical_position=True, # adds 3 fields: is_downbeat, rel_onset_div, tot_measure_div
+            include_grace_notes=True # adds 2 fields: is_grace, grace_type
+        )
+        return extended_score_note_array
 
 Q = TypeVar("Q", bound=Stream)
 def _parse(path: str, expected_type: type[Q]) -> Q:

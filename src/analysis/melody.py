@@ -33,7 +33,7 @@ def _copy_part_with_classes(obj: M21Part, classes: tuple[type, ...]) -> M21Part:
             el.activeSite.remove(el)
     return new_stream
 
-def _sanitize(part: M21Part) -> M21Part:
+def _sanitize_as_melody(part: M21Part) -> M21Part:
     """Sanitize a music21 Part object to make it suitable for use as a melody.
     Internally makes a copy of the part and removes all elements that are not suitable for a melody.
 
@@ -116,7 +116,7 @@ class Melody:
     _TOO_HIGH_THRESHOLD = 34 # A above middle C
 
     def __init__(self, part: M21Part):
-        self._part = _sanitize(part)
+        self._part = _sanitize_as_melody(part)
 
     @property
     def has_pickup(self):

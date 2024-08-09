@@ -61,7 +61,7 @@ def fix_rest_and_clef(parts: list[M21Part], *, inPlace: bool = False):
         data.insert(0, clef)
 
     new_score = Score()
-    for part in parts:
+    for part in sanitized_parts:
         new_score.insert(0., part._sanitize_in_place()._data)
 
     return M21Score(new_score)

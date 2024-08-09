@@ -113,6 +113,7 @@ class M21StreamWrapper(M21Wrapper[T]):
         return stream
 
     def _sanitize_in_place(self):
+        super()._sanitize_in_place()
         # This seems to lead to weird behavior
         # TODO investigate about this tying over bars and measures
         # case in point test 1079 measure 15

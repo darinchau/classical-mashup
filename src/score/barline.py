@@ -12,6 +12,7 @@ class M21Barline(M21Wrapper[Barline]):
             assert self._data.direction in ("start", "end")
 
     def _sanitize_in_place(self):
+        super()._sanitize_in_place()
         if self._data.type not in self._ALLOWED_TYPES:
             self._data.type = "regular"
         if isinstance(self._data, Repeat):

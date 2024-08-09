@@ -131,6 +131,10 @@ class M21NoteWrapper(M21Wrapper[T]):
         from .articulation import _ALLOWED as _ALLOWED_ARTICULATION
         from .expressions import _ALLOWED as _ALLOWED_EXPRESSION
 
+        super()._sanitize_in_place()
+
+        self._data.lyrics = []
+
         allowed_articulation_cls = tuple(cls for cls, _ in _ALLOWED_ARTICULATION)
         allowed_expression_cls = tuple(cls for cls, _ in _ALLOWED_EXPRESSION)
 
@@ -246,6 +250,8 @@ class M21Rest(M21Wrapper[Rest]):
     def _sanitize_in_place(self):
         from .articulation import _ALLOWED as _ALLOWED_ARTICULATION
         from .expressions import _ALLOWED as _ALLOWED_EXPRESSION
+
+        super()._sanitize_in_place()
 
         allowed_articulation_cls = tuple(cls for cls, _ in _ALLOWED_ARTICULATION)
         allowed_expression_cls = tuple(cls for cls, _ in _ALLOWED_EXPRESSION)

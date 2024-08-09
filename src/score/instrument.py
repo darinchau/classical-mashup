@@ -9,7 +9,9 @@ class M21Instrument(M21Wrapper[Instrument]):
         return super().sanity_check()
 
     def _sanitize_in_place(self):
-        self._data = Instrument('piano')
+        super()._sanitize_in_place()
+        piano = Instrument('piano')
+        self._data.__dict__.update(piano.__dict__)
 
     @property
     def name(self):

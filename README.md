@@ -19,3 +19,8 @@ sudo apt install -y fluidsynth
 
 We are experimenting with both partitura and music21, with our own wrappers around common objects like scores and notes.
 Our main representation is however based on the music21 Score since it seems more mature. We will convert to partitura when needed.
+
+All in-place operations on the wrappers that modify the underlying music21 score object should
+- have a name that starts with an underscore
+- says "in_place" in the name
+- return self

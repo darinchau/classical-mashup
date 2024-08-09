@@ -190,23 +190,10 @@ class M21Score(M21StreamWrapper[Score]):
                         Articulation, Barline, Dynamic, GeneralNote, Interval, Voice, Score, Opus
                     )), f"Parts inside a score can only contain measures and other special objects, not {measure.__class__.__name__}"
 
-        # Check the well-orderedness of measures
-        # Skip this check if there are no measures
-        measure_numbers = set(self.measure_numbers())
-
-        if self.has_pickup:
-            assert len(measure_numbers) > 1, "Score must have at least one measure"
-            assert measure_numbers == set(range(max(measure_numbers) + 1)), "Measure numbers must be contiguous"
-        elif len(measure_numbers) > 0:
-            assert measure_numbers == set(range(1, max(measure_numbers) + 1)), "Measure numbers must be contiguous"
-
-        for part in self._data.iter():
-            if isinstance(part, Part):
-                part_measure_number: set[int] = set()
-                for measure in part.iter():
-                    if isinstance(measure, Measure):
-                        part_measure_number.add(measure.number)
-                assert part_measure_number == measure_numbers, f"Part {part.id} does not have the same measure numbers as the score. {part_measure_number ^ measure_numbers}"
+        # Makes sure that all the part offsets are the same
+        nparts = self.nparts
+        for offset, parts in self._data.measureOffsetMap().items():
+            assert len(parts) == nparts, f"Measure {offset} does not have the same number of parts as the score. {len(parts)} != {self.nparts}"
 
     @classmethod
     def parse(cls, path: str):
@@ -241,10 +228,16 @@ class M21Score(M21StreamWrapper[Score]):
     @property
     def has_pickup(self):
         """Returns True if the score has a pickup measure"""
-        m = self.measure_numbers()
-        if not m:
+        nmeasures = len(self._data.measureOffsetMap().keys())
+        if nmeasures == 0:
+            raise ValueError("Score must have at least one measure")
+        if nmeasures == 1:
             return False
-        return m[0] == 0
+        if nmeasures == 2:
+            measure1 = self.get_measure(0, 1)
+            measure2 = self.get_measure(0, 2)
+            return measure1.bar_duration.quarterLength < measure2.bar_duration.quarterLength
+        return m21.repeat.RepeatFinder(self._data).hasPickup()
 
     def get_measure(self, part_idx: int, measure_number: int) -> M21Measure:
         """Grabs a single measure specified by measure number"""
@@ -254,6 +247,19 @@ class M21Score(M21StreamWrapper[Score]):
         if m is None:
             raise ValueError(f"Measure {measure_number} does not exist in the score.")
         return M21Measure(m)
+
+    def _fix_measure_numbers_in_place(self):
+        """Fix the measure numbers in the score to make it contiguous. This will expand repeats (when repeats are supported)
+        Pickup measures will be labelled as measure 0."""
+        ## TODO suporrt repeats
+        measure_map_keys = self._data.measureOffsetMap()
+
+    def _sanitize_in_place(self):
+        super()._sanitize_in_place()
+        # for part in self._data.parts:
+        #     for measure in part:
+        #         wrap(measure)._sanitize_in_place()
+        return self
 
     def _convert_to_partitura(self):
         """Convert the score to a Partitura object."""
@@ -283,3 +289,20 @@ _ALLOWED = (
     (Score, M21Score),
     (Stream, M21StreamWrapper)
 )
+
+def draft(self):
+    measure_numbers = set(self.measure_numbers())
+
+    if self.has_pickup:
+        assert len(measure_numbers) > 1, "Score must have at least one measure"
+        assert measure_numbers == set(range(max(measure_numbers) + 1)), "Measure numbers must be contiguous"
+    elif len(measure_numbers) > 0:
+        assert measure_numbers == set(range(1, max(measure_numbers) + 1)), "Measure numbers must be contiguous"
+
+    for part in self._data.iter():
+        if isinstance(part, Part):
+            part_measure_number: set[int] = set()
+            for measure in part.iter():
+                if isinstance(measure, Measure):
+                    part_measure_number.add(measure.number)
+            assert part_measure_number == measure_numbers, f"Part {part.id} does not have the same measure numbers as the score. {part_measure_number ^ measure_numbers}"

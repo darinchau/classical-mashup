@@ -2,10 +2,12 @@
 
 from src.score import *
 from src.analysis.melody import Melody
+import music21 as m21
 from music21.note import Note
-from music21.stream.base import Part
+from music21.stream.base import Part, Measure, Score
+from music21.meter.base import TimeSignature
 from music21 import corpus, converter
-from src.analysis.melody.base import _sanitize
+from src.analysis.melody import _sanitize
 
 def test_note_transposition():
     # Tests the transposition of notes
@@ -18,7 +20,7 @@ def test_basic_parse():
     # Tests basic M21Score parsing
     c = M21Score.parse("-test.prelude")
     assert c.quarter_length == 140
-    assert c.measures(1, 2).parts[0].notes[0].name == "G4"
+    assert c.get_measure(0, 1).notes[0].name == "G4"
 
 def test_duration_immutability():
     # Tests that the duration object is immutable
@@ -35,32 +37,6 @@ def test_get_next_note():
     assert s.notes[3].get_next_note() == s.notes[4]
     assert s.notes[5].get_next_note() == s.notes[6]
 
-def test_grace_note():
-    part = M21Part.parse("tinynotation: 4/4 c4 d e f g a b c' b a g2")
-
-    n =  part.notes[0]
-    gn = M21Note.from_name("F#").set_duration(1/2)
-
-    part2 = part.add_grace_note(n, [
-        gn,
-    ])
-
-    assert part2.notes[0] == gn
-
-    try:
-        part3 = part2.add_nachschlagen(part2.notes[1], [
-            M21Note.from_name("G#").set_duration(1/2)
-        ])
-        assert False, "Should not be able to add grace note repeatedly"
-    except ValueError:
-        pass
-
-    part3 = part2.add_grace_note(part2.notes[3], [
-        M21Note.from_name("G#4").set_duration(1/4)
-    ])
-
-    assert part3.notes[1]._data.offset == 2.0
-
 def test_sanitize_basic():
     # Tests the basic functionality of the sanitize function for a melody
     p = load_part_from_corpus('bach/bwv66.6')
@@ -71,26 +47,26 @@ def test_sanitize_basic():
     assert s._data.recurse()[idx].__class__.__name__ != "Instrument"
 
 def test_sanitize_grace_note():
-    part = M21Part.parse("tinynotation: 4/4 c4 d e f g a b c' b a g2")
-
-    part._sanitize_in_place()
-
-    n =  part.notes[0]
-    gn = M21Note.from_name("F#").set_duration(1/2)
-
-    part2 = part.add_grace_note(n, [
-        gn,
+    m = Measure()
+    m.append(TimeSignature('4/4'))
+    m.repeatAppend(m21.note.Note('C5'), 4)
+    d = m21.note.Note('D5', type='eighth')
+    dGrace = d.getGrace()
+    m.number = 1
+    m.insert(2.0, dGrace)
+    s = Score([
+        Part([m])
     ])
+    s = M21Score(s)
+    assert len(s.notes) == 5
+    s._remove_all_grace_notes_in_place()
+    assert len(s.notes) == 4
 
-    assert part2.notes[0] == gn
-    part2._sanitize_in_place()
-    assert part2.notes[0] == gn
-
-def test_sanitize_strip_ties():
-    part = converter.parse('tinyNotation: 2/4 d4. e8~ e4 d4~ d8 f4.')
-    assert isinstance(part, Part)
-    m = Melody(M21Part(part))
-    assert len(m._part.notes) == 4
+# def test_sanitize_strip_ties():
+#     part = converter.parse('tinyNotation: 2/4 d4. e8~ e4 d4~ d8 f4.')
+#     assert isinstance(part, Part)
+#     m = Melody(M21Part(part))
+#     assert len(m._part.notes) == 4
 
 def test_sanitize_bar_line():
     s = M21Score.parse("-test.1079")

@@ -53,8 +53,7 @@ def wrap(obj: T) -> M21Wrapper[T]:
 
 def is_type_allowed(obj: M21Object):
     """Checks if the object is allowed to be wrapped"""
-    from .stream import GraceNoteContext
-    classes = tuple(cls for cls, _ in get_lookup()) + (GraceNoteContext,)
+    classes = tuple(cls for cls, _ in get_lookup())
     return isinstance(obj, classes)
 
 def check_obj(obj: M21Object) -> bool:

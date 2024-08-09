@@ -102,7 +102,8 @@ class M21NoteWrapper(M21Wrapper[T]):
 
     @property
     def is_grace_note(self):
-        """Returns True the note is a grace note somewhere in a stream, associated with a note"""
+        """Returns True the note is a grace note somewhere in a stream, associated with a note. This method
+        is different from is_grace, which checks if the note itself is a grace note"""
         ctx = self._get_associated_grace_note_ctx(as_parent=False)
         return ctx is not None and ctx.note_type == "grace"
 
@@ -187,7 +188,7 @@ class M21Note(M21NoteWrapper[Note]):
         return self._data.pitch.step
 
 
-class M21Chord(M21Wrapper[Chord]):
+class M21Chord(M21NoteWrapper[Chord]):
     def sanity_check(self):
         super().sanity_check()
         _ = self.notes # This constructs the notes which will check if every note is a valid note

@@ -119,6 +119,8 @@ class M21StreamWrapper(M21Wrapper[T]):
         # case in point test 1079 measure 15
         # self._data.stripTies(inPlace = True)
         # self._data.makeTies(inPlace = True)
+        # TODO support grace notes
+        self._remove_all_grace_notes_in_place()
         for el in self._data.iter():
             if not is_type_allowed(el):
                 el.activeSite.remove(el)
@@ -167,6 +169,16 @@ class M21StreamWrapper(M21Wrapper[T]):
             convert_midi_to_wav(f1.name, f2.name, soundfont_path, sample_rate, verbose)
             return Audio.load(f2.name)
 
+    def _remove_all_grace_notes_in_place(self):
+        """Remove all grace notes in the stream"""
+        from .note import _wrap_upcast
+        for el in self._data.recurse():
+            should_remove = (isinstance(el, (Note, Chord)) and _wrap_upcast(el).is_grace) or isinstance(el, GraceNoteContext)
+            if should_remove:
+                assert el.activeSite is not None
+                el.activeSite.remove(el)
+        return self
+
 class M21Measure(M21StreamWrapper[Measure]):
     """Wrapper for a music21 Measure object"""
     @property
@@ -185,7 +197,6 @@ class M21Measure(M21StreamWrapper[Measure]):
             wrap(self._data.leftBarline)._sanitize_in_place()
         if self._data.rightBarline is not None:
             wrap(self._data.rightBarline)._sanitize_in_place()
-
         return self
 
 class M21Part(M21StreamWrapper[Part]):
@@ -201,6 +212,14 @@ class M21Part(M21StreamWrapper[Part]):
         if measure is None:
             raise ValueError(f"Measure {measure_number} does not exist in the part.")
         return M21Measure(measure)
+
+    def pretty(self):
+        """Returns a prettified string representation of the part"""
+        import partitura as pt
+        score = M21Score(Score([
+            self._data
+        ]))._convert_to_partitura()
+        return score.parts[0].pretty()
 
 
 class M21Score(M21StreamWrapper[Score]):
@@ -290,6 +309,12 @@ class M21Score(M21StreamWrapper[Score]):
         if m is None:
             raise ValueError(f"Measure {measure_number} does not exist in the score.")
         return M21Measure(m)
+
+    def _convert_to_partitura(self):
+        """Convert the score to a Partitura object."""
+        import partitura as pt
+        tmp_path = self._data.write("musicxml")
+        return pt.load_score(tmp_path)
 
 def _add_grace_note(new_stream: M21StreamWrapper, note: M21Note | M21Chord, grace_notes: Iterable[M21Note | M21Chord], _type: GraceNoteType, *,
                    slur: bool = True,

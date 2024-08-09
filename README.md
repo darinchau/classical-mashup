@@ -16,3 +16,6 @@ You need fluidsynth to run the midi2wav function.
 ```
 sudo apt install -y fluidsynth
 ```
+
+We are experimenting with both partitura and music21, with our own wrappers around common objects like scores and notes.
+Our main representation is however based on the music21 Score since it seems more mature. We will convert to partitura when needed.

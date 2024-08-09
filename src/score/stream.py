@@ -67,10 +67,7 @@ class M21StreamWrapper(M21Wrapper[T]):
         # TODO support grace notes
         self._remove_all_grace_notes_in_place()
         for el in self._data.iter():
-            if not is_type_allowed(el):
-                el.activeSite.remove(el)
-                continue
-            if not check_obj(el):
+            if not is_type_allowed(el) or not check_obj(el):
                 el.activeSite.remove(el)
                 continue
             wrap(el)._sanitize_in_place() # Sanitize child

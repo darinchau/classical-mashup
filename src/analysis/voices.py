@@ -41,16 +41,11 @@ def fix_rest_and_clef(parts: list[M21Part], *, inPlace: bool = False):
     - Replace the clef with the best clef for the part
 
     Returns a new M21Score object with the fixed parts"""
-    n_parts = len(parts)
+    sanitized_parts = [part.sanitize() for part in parts]
 
-    for i in range(n_parts):
-        if not inPlace:
-            parts[i] = parts[i].sanitize()
-        else:
-            parts[i]._sanitize_in_place()
-        parts[i]._data.makeRests(inPlace=True, fillGaps=True)
-
-        data = parts[i]._data
+    for part in sanitized_parts:
+        data = part._data
+        data.makeRests(inPlace=True, fillGaps=True)
 
         for elem in data.getElementsByClass(Measure):
             if measures_all_rest(elem):
@@ -67,7 +62,7 @@ def fix_rest_and_clef(parts: list[M21Part], *, inPlace: bool = False):
 
     new_score = Score()
     for part in parts:
-        new_score.insert(0., part.sanitize()._data)
+        new_score.insert(0., part._sanitize_in_place()._data)
 
     return M21Score(new_score)
 
@@ -212,7 +207,7 @@ def merge_measures(measure1: M21Measure, measure2: M21Measure, *, tuplet_upper_b
     return M21Measure(merged_part)
 
 def separate_voices(score: M21Score):
-    parts = M21Score(score.sanitize()._data.voicesToParts()).sanitize().parts
+    parts = M21Score(score.sanitize()._data.voicesToParts()).parts
     new_score = fix_rest_and_clef(parts)
 
     # TODO support other number of parts
@@ -221,13 +216,14 @@ def separate_voices(score: M21Score):
     if len(parts) != 4:
         raise ValueError("Expected 2, 3, or 4 parts")
 
-    soprano = new_score.parts[0]._data.cloneEmpty("separate_voices")
-    alto = new_score.parts[1]._data.cloneEmpty("separate_voices")
-    bass = new_score.parts[2]._data.cloneEmpty("separate_voices")
+    parts = new_score.parts
+    soprano = parts[0]._data.cloneEmpty("separate_voices")
+    alto = parts[1]._data.cloneEmpty("separate_voices")
+    bass = parts[2]._data.cloneEmpty("separate_voices")
 
     try:
         for i in new_score.measure_numbers():
-            offset = offset_to_score(new_score.parts[0].measure(i)._data, new_score)
+            offset = offset_to_score(new_score.get_measure(0, i)._data, new_score)
             soprano.insert(offset, new_score.get_measure(0, i)._data)
             if not measures_all_rest(new_score.get_measure(3, i)._data):
                 measure1 = new_score.get_measure(1, i)

@@ -66,68 +66,6 @@ class M21NoteWrapper(M21Wrapper[T]):
             return None
         return _wrap_upcast(next_note)
 
-    def _get_associated_grace_note_ctx(self, as_parent: bool = False):
-        """Used internally to get the grace note context associated with this note"""
-        from .stream import GraceNoteContext
-        if not as_parent and not self.is_grace:
-            return
-
-        active_site = self._data.activeSite
-        if active_site is None:
-            return
-        ctxs = active_site.getElementsByClass(GraceNoteContext)
-        if not ctxs:
-            return
-        ctx: GraceNoteContext | None = None
-        for c in ctxs:
-            if as_parent:
-                if c.parent == self._data:
-                    ctx = c
-                    break
-            else:
-                if self._data in c:
-                    ctx = c
-                    break
-        if ctx is None:
-            return
-        return ctx
-
-    def get_grace_notes(self) -> list[M21Note | M21Chord]:
-        """Returns a list of grace notes associated with the note"""
-        ctx = self._get_associated_grace_note_ctx(as_parent=True)
-        if ctx is None:
-            return []
-
-        return [_wrap_upcast(x) for x in ctx.notes]
-
-    @property
-    def is_grace_note(self):
-        """Returns True the note is a grace note somewhere in a stream, associated with a note. This method
-        is different from is_grace, which checks if the note itself is a grace note"""
-        ctx = self._get_associated_grace_note_ctx(as_parent=False)
-        return ctx is not None and ctx.note_type == "grace"
-
-    @property
-    def is_nachschlagen(self):
-        """Returns True the note is a nachschlagen note somewhere in a stream, associated with a note"""
-        ctx = self._get_associated_grace_note_ctx(as_parent=False)
-        return ctx is not None and ctx.note_type == "nachschlagen"
-
-    @property
-    def has_grace_note_parent(self):
-        """Returns True if the note is a grace note with a parent"""
-        return self._get_associated_grace_note_ctx(as_parent=False) is not None
-
-    @property
-    def has_grace_note_child(self):
-        """Returns True if the note has a grace note child"""
-        return self._get_associated_grace_note_ctx(as_parent=True) is not None
-
-    @property
-    def expressions(self):
-        """Returns a list of expressions associated with the note"""
-        return [wrap(x) for x in self._data.expressions]
-
     def _sanitize_in_place(self):
         from .articulation import _ALLOWED as _ALLOWED_ARTICULATION
         from .expressions import _ALLOWED as _ALLOWED_EXPRESSION

@@ -24,42 +24,6 @@ from ..audio import Audio
 from typing import Literal, Sequence
 import copy
 
-GraceNoteType = Literal["grace", "nachschlagen"]
-class GraceNoteContext(Stream):
-    # A context to store grace notes. The implementation is similar to SpannerStorage
-    def __init__(self, elements: Sequence[Note | Chord], parent: Note | Chord, _type: GraceNoteType, **keywords):
-        self.parent = parent
-        self._type = _type
-        super().__init__(elements, **keywords)
-
-    @property
-    def note_type(self) -> GraceNoteType:
-        if self._type == "grace":
-            return "grace"
-        elif self._type == "nachschlagen":
-            return "nachschlagen"
-        else:
-            raise ValueError(f"Unknown grace note type {self._type}")
-
-    def _reprInternal(self):
-        # This is a hack to make the repr look nice
-        tc = type(self.parent)
-        return f'for {tc.__module__}.{tc.__qualname__}'
-
-    def coreSelfActiveSite(self, el):
-        # Never set the active site of a GraceNoteContext
-        # This overrides the default behavior of music21
-        pass
-
-    def coreStoreAtEnd(self, element, setActiveSite=True):
-        raise NotImplementedError("GraceNoteContext cannot store elements at the end")
-
-    def replace(self, target: M21Object,  replacement: M21Object, *, recurse: bool = False, allDerived: bool = True) -> None:
-        if replacement in self:
-            self.remove(target)
-            return
-        super().replace(target, replacement, recurse=recurse, allDerived=allDerived)
-
 T = TypeVar("T", bound=Stream)
 class M21StreamWrapper(M21Wrapper[T]):
     """Wrapper for music21 Stream object. Provides methods to iterate over the stream."""
@@ -92,25 +56,6 @@ class M21StreamWrapper(M21Wrapper[T]):
     def show(self, fmt = None):
         """Calls the show method of the music21 Stream object. Refer to the music21 documentation for more information."""
         return self._data.show(fmt)
-
-    def add_grace_note(self, note: M21Note | M21Chord, grace_notes: Iterable[M21Note | M21Chord], *,
-                       slur: bool = True,
-                       appoggiatura: bool = False,
-                       override_priority: bool = False):
-        """Add grace notes to the note. The grace note will be inserted before the note and after any other grace notes. Returns the new stream.
-        The function will also implicitly modify all the notes in the grace_notes list to become the added grace_notes
-
-        Extra parameters:
-        slur (bool): Whether to add a slur to the whole thing or no
-        appogiatura (bool): Whether to add an appoggiatura or a slashed grace note (acciaccatura)
-        override_priority (bool): Whether to automatically change the priority of grace notes. Set to True if the order of grace notes are not expected"""
-        copied_note, stream = _add_grace_note(self.copy(), note, grace_notes, "grace", slur=slur, appoggiatura=appoggiatura, override_priority=override_priority)
-        return stream
-
-    def add_nachschlagen(self, note: M21Note | M21Chord, grace_notes: Iterable[M21Note | M21Chord], *, override_priority: bool = False):
-        """Adds a nachschlagen to a note. A nachschlagen is the little flourish notes after a trill that indicates the resolve of a trill."""
-        copied_note, stream = _add_grace_note(self.copy(), note, grace_notes, "nachschlagen", slur=False, appoggiatura=True, override_priority=override_priority)
-        return stream
 
     def _sanitize_in_place(self):
         super()._sanitize_in_place()
@@ -173,7 +118,7 @@ class M21StreamWrapper(M21Wrapper[T]):
         """Remove all grace notes in the stream"""
         from .note import _wrap_upcast
         for el in self._data.recurse():
-            should_remove = (isinstance(el, (Note, Chord)) and _wrap_upcast(el).is_grace) or isinstance(el, GraceNoteContext)
+            should_remove = (isinstance(el, (Note, Chord)) and _wrap_upcast(el).is_grace)
             if should_remove:
                 assert el.activeSite is not None
                 el.activeSite.remove(el)
@@ -315,54 +260,6 @@ class M21Score(M21StreamWrapper[Score]):
         import partitura as pt
         tmp_path = self._data.write("musicxml")
         return pt.load_score(tmp_path)
-
-def _add_grace_note(new_stream: M21StreamWrapper, note: M21Note | M21Chord, grace_notes: Iterable[M21Note | M21Chord], _type: GraceNoteType, *,
-                   slur: bool = True,
-                   appoggiatura: bool = False,
-                   override_priority: bool = False):
-    # Find the corresponding note in the copied stream
-    copied_note = [n for n in new_stream._data.recurse().notes if n.derivation.origin is not None and n.derivation.origin.id == note.id]
-    if not copied_note:
-        raise ValueError(f"Note {note.id} not an element in the stream.")
-    copied_note = copied_note[0]
-
-    # Perform some checks on copied_note. We perform type checks on the ._data to account for subclasses
-    assert len(copied_note.pitches) > 0
-    assert all(p.isTwelveTone() for p in copied_note.pitches)
-    assert isinstance(copied_note, (Note, Chord)), f"Note {copied_note} is not a Note or Chord object ({copied_note.__class__.__name__})"
-    assert not isinstance(copied_note.duration, (m21.duration.GraceDuration, m21.duration.AppoggiaturaDuration)), f"Note {copied_note} is a grace note"
-    copied_note = _wrap_upcast(copied_note)
-    active_site = copied_note._data.activeSite
-    assert active_site is not None, f"Note {copied_note.id} is not active"
-
-    existing_ctx = active_site.getElementsByClass(GraceNoteContext)
-    if existing_ctx is not None:
-        for ctx in existing_ctx:
-            if ctx.parent == copied_note._data:
-                raise ValueError(f"Note {note.id} ({note.name}) already has grace notes. Repeated calls to add_grace_note is not supported yet.")
-
-    # Gets the grace notes
-    for x in grace_notes:
-        x._data.getGrace(appoggiatura=appoggiatura, inPlace=True)
-    grace_notes = [x for x in grace_notes if x is not None]
-
-    # Initialize a grace note context to store the grace notes
-    ctx = GraceNoteContext([x._data for x in grace_notes], parent=copied_note._data, _type=_type)
-    active_site.insert(0.0, ctx)
-
-    offset = copied_note._data.getOffsetBySite(active_site)
-    for i, gn in enumerate(reversed(grace_notes)):
-        active_site.insert(offset, gn._data)
-        if override_priority:
-            if _type == "grace":
-                gn._data.priority = copied_note._data.priority - i - 1
-            else:
-                gn._data.priority = copied_note._data.priority + i + 1
-
-    if slur:
-        sl = m21.spanner.Slur([gn._data for gn in grace_notes] + [copied_note._data])
-        active_site.insert(0.0, sl)
-    return copied_note, new_stream
 
 Q = TypeVar("Q", bound=Stream)
 def _parse(path: str, expected_type: type[Q]) -> Q:

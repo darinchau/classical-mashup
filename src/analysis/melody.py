@@ -45,8 +45,7 @@ def _sanitize(part: M21Part) -> M21Part:
     # Do a first pass to remove anything thats definitely illegal
     # Cannot use removeByNotOfClass because it does not remove recursively
     filter_list = [Note, Rest, Chord, KeySignature, TimeSignature]
-    new_part = _copy_part_with_classes(part, tuple(filter_list))
-    new_part._sanitize_in_place()
+    new_part = _copy_part_with_classes(part, tuple(filter_list))._sanitize_in_place()
 
     replacements: list[tuple[M21Object, M21Object | None]] = []
 

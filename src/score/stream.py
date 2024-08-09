@@ -127,7 +127,7 @@ class M21StreamWrapper(M21Wrapper[T]):
                 el.activeSite.remove(el)
                 continue
             wrap(el)._sanitize_in_place() # Sanitize child
-        return
+        return self
 
     def write_to_midi(self, path: str):
         """Write a music21 Stream object to a MIDI file."""
@@ -163,7 +163,7 @@ class M21StreamWrapper(M21Wrapper[T]):
             tempfile.NamedTemporaryFile(suffix=".mid") as f1,
             tempfile.NamedTemporaryFile(suffix=".wav") as f2
         ):
-            self.copy()._normalize_audio_in_place(). write_to_midi(f1.name)
+            self.copy()._normalize_audio_in_place().write_to_midi(f1.name)
             convert_midi_to_wav(f1.name, f2.name, soundfont_path, sample_rate, verbose)
             return Audio.load(f2.name)
 
@@ -185,6 +185,8 @@ class M21Measure(M21StreamWrapper[Measure]):
             wrap(self._data.leftBarline)._sanitize_in_place()
         if self._data.rightBarline is not None:
             wrap(self._data.rightBarline)._sanitize_in_place()
+
+        return self
 
 class M21Part(M21StreamWrapper[Part]):
     """Wrapper for music21 Part object"""

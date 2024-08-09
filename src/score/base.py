@@ -41,13 +41,11 @@ class M21Wrapper(Generic[T]):
 
     def _sanitize_in_place(self):
         """Sanitize the object. This method should be overridden by subclasses."""
-        pass
+        return self
 
     def sanitize(self):
         """Return a sanitized version of the object."""
-        new_obj = self.copy()
-        new_obj._sanitize_in_place()
-        return new_obj
+        return self.copy()._sanitize_in_place()
 
     def __eq__(self, value) -> bool:
         if isinstance(value, M21Wrapper):

@@ -12,6 +12,7 @@ class M21Instrument(M21Wrapper[Instrument]):
         super()._sanitize_in_place()
         piano = Instrument('piano')
         self._data.__dict__.update(piano.__dict__)
+        return self
 
     @property
     def name(self):

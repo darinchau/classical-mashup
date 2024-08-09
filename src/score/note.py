@@ -141,6 +141,8 @@ class M21NoteWrapper(M21Wrapper[T]):
         self._data.articulations = [a for a in self._data.articulations if isinstance(a, allowed_articulation_cls)] # type: ignore
         self._data.expressions = [e for e in self._data.expressions if isinstance(e, allowed_expression_cls)] # type: ignore
 
+        return self
+
 
 class M21Note(M21NoteWrapper[Note]):
     """Represents a music21 Note object with some convenience functions and properties. A note must be a 12-tone pitched note with a certain duration and within the midi range."""
@@ -258,6 +260,8 @@ class M21Rest(M21Wrapper[Rest]):
 
         self._data.articulations = [a for a in self._data.articulations if isinstance(a, allowed_articulation_cls)]
         self._data.expressions = [e for e in self._data.expressions if isinstance(e, allowed_expression_cls)]
+
+        return self
 
 _ALLOWED = (
     (Note, M21Note),

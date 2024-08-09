@@ -224,16 +224,11 @@ class M21Score(M21StreamWrapper[Score]):
 
     @property
     def has_pickup(self):
-        """Returns True if the score has a pickup measure"""
+        """Returns True if the score has a pickup measure. Will return False if the score has less than 3 measures since
+        it is impossible to have a pickup measure in that case."""
         nmeasures = len(self._data.measureOffsetMap().keys())
-        if nmeasures == 0:
-            raise ValueError("Score must have at least one measure")
-        if nmeasures == 1:
+        if nmeasures < 3:
             return False
-        if nmeasures == 2:
-            measure1 = self.get_measure(0, 1)
-            measure2 = self.get_measure(0, 2)
-            return measure1.bar_duration.quarterLength < measure2.bar_duration.quarterLength
         return m21.repeat.RepeatFinder(self._data).hasPickup()
 
     def get_measure(self, part_idx: int, measure_number: int) -> M21Measure:
@@ -248,14 +243,41 @@ class M21Score(M21StreamWrapper[Score]):
     def _fix_measure_numbers_in_place(self):
         """Fix the measure numbers in the score to make it contiguous. This will expand repeats (when repeats are supported)
         Pickup measures will be labelled as measure 0."""
-        ## TODO suporrt repeats
+        ## TODO support repeats
         measure_map_keys = self._data.measureOffsetMap()
+        offsets = sorted(measure_map_keys.keys())
+
+        bar_number = 0 if self.has_pickup else 1
+        for offset in offsets:
+            for measure in measure_map_keys[offset]:
+                measure.number = bar_number
+            bar_number += 1
+        return self
+
+    def _check_measure_numbers(self):
+        """Check if the measure numbers in the score are contiguous and start from 1. Pickup measures are allowed to start from 0.
+
+        If any of the checks fail, an AssertionError will be raised."""
+        measure_numbers = set(self.measure_numbers())
+
+        if self.has_pickup:
+            assert len(measure_numbers) > 1, "Score must have at least one measure"
+            assert measure_numbers == set(range(max(measure_numbers) + 1)), "Measure numbers must be contiguous"
+        elif len(measure_numbers) > 0:
+            assert measure_numbers == set(range(1, max(measure_numbers) + 1)), "Measure numbers must be contiguous"
+
+        for part in self._data.iter():
+            if isinstance(part, Part):
+                part_measure_number: set[int] = set()
+                for measure in part.iter():
+                    if isinstance(measure, Measure):
+                        part_measure_number.add(measure.number)
+                assert part_measure_number == measure_numbers, f"Part {part.id} does not have the same measure numbers as the score. {part_measure_number ^ measure_numbers}"
 
     def _sanitize_in_place(self):
         super()._sanitize_in_place()
-        # for part in self._data.parts:
-        #     for measure in part:
-        #         wrap(measure)._sanitize_in_place()
+        self._fix_measure_numbers_in_place()
+        self._check_measure_numbers()
         return self
 
     def _convert_to_partitura(self):
@@ -286,20 +308,3 @@ _ALLOWED = (
     (Score, M21Score),
     (Stream, M21StreamWrapper)
 )
-
-def draft(self):
-    measure_numbers = set(self.measure_numbers())
-
-    if self.has_pickup:
-        assert len(measure_numbers) > 1, "Score must have at least one measure"
-        assert measure_numbers == set(range(max(measure_numbers) + 1)), "Measure numbers must be contiguous"
-    elif len(measure_numbers) > 0:
-        assert measure_numbers == set(range(1, max(measure_numbers) + 1)), "Measure numbers must be contiguous"
-
-    for part in self._data.iter():
-        if isinstance(part, Part):
-            part_measure_number: set[int] = set()
-            for measure in part.iter():
-                if isinstance(measure, Measure):
-                    part_measure_number.add(measure.number)
-            assert part_measure_number == measure_numbers, f"Part {part.id} does not have the same measure numbers as the score. {part_measure_number ^ measure_numbers}"

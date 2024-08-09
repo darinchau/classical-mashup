@@ -73,3 +73,15 @@ def test_sanitize_bar_line():
     s.parts[0].measure(2)._data.rightBarline = 'none'
     assert s.parts[0].measure(2)._data.rightBarline.type == 'none'
     assert s.sanitize().parts[0].measure(2)._data.rightBarline.type == 'regular'
+
+def test_sanitize_measure_numbers():
+    s = M21Score.parse("-test.1079")
+
+    # Scramble measure numbers
+    import random
+    for p in s._data.parts:
+        for m in p.getElementsByClass(Measure):
+            m.number = random.randint(1, 1000)
+
+    s._fix_measure_numbers_in_place()
+    s._check_measure_numbers()

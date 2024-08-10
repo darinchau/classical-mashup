@@ -283,14 +283,13 @@ class M21Score(M21StreamWrapper[Score]):
     def _convert_to_partitura(self):
         """Convert the score to a Partitura object."""
         import partitura as pt
-
         # The load_music21 method doesnt seem to work properly. This is more consistent
         tmp_path = self._data.write("musicxml")
         return pt.load_score(tmp_path)
 
-    def get_note_array(self):
-        import partitura as pt
-        extended_score_note_array = pt.utils.music.ensure_notearray(
+    def get_raw_note_array(self):
+        from partitura.utils.music import ensure_notearray
+        extended_score_note_array = ensure_notearray(
             self._convert_to_partitura(),
             include_pitch_spelling=True, # adds 3 fields: step, alter, octave
             include_key_signature=True, # adds 2 fields: ks_fifths, ks_mode
@@ -299,6 +298,12 @@ class M21Score(M21StreamWrapper[Score]):
             include_grace_notes=True # adds 2 fields: is_grace, grace_type
         )
         return extended_score_note_array
+
+    def get_note_representation_list(self):
+        """Returns a list of NoteRepresentation objects for each note in the score"""
+        from ..analysis.representation import NoteRepresentation
+        arr = self.get_raw_note_array()
+        return [NoteRepresentation.from_array(x) for x in arr]
 
 Q = TypeVar("Q", bound=Stream)
 def _parse(path: str, expected_type: type[Q]) -> Q:

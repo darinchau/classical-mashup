@@ -91,7 +91,7 @@ def test_sanitize_measure_numbers():
 def test_sanitize_grace_note_2():
     s = M21Score.parse("-test.1079")
     s._sanitize_in_place()
-    arr = s.get_note_array()
+    arr = s.get_raw_note_array()
     assert np.all(arr['is_grace'] == 0)
 
 def test_separate_voices():

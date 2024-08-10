@@ -1,5 +1,8 @@
 # Implements various data structure representations for a score
+from __future__ import annotations
 from dataclasses import dataclass
+import numpy as np
+from ..score import M21Score
 
 @dataclass(frozen=True)
 class NoteRepresentation:
@@ -83,3 +86,56 @@ class NoteRepresentation:
             rel_onset_div = int(array["rel_onset_div"]),
             tot_measure_div = int(array["tot_measure_div"])
         )
+
+    @property
+    def offset_beat(self):
+        """The offset of the note in beats"""
+        return self.onset_beat + self.duration_beat
+
+    @property
+    def offset_quarter(self):
+        """The offset of the note in quarters"""
+        return self.onset_quarter + self.duration_quarter
+
+@dataclass
+class NoteGraphNeighbours:
+    """A data structure to represent the neighbours of a note in a graph
+    concurrent: list[int]: When two notes are fired together
+    consecutive: list[int]: When two notes follow each other
+    overlap: list[int]: When two notes overlap i.e. one note fires before the other ends
+    """
+    concurrent: list[int] # When two notes are fired together
+    consecutive: list[int] # When two notes follow each other
+    overlap: list[int]  # When two notes overlap i.e. one note fires before the other ends
+
+def make_score_graph(notes: list[NoteRepresentation], *, tol = 1e-4) -> list[NoteGraphNeighbours]:
+    notes_by_onset = sorted([[n.onset_beat, i] for i, n in enumerate(notes)])
+    neighbours = [NoteGraphNeighbours([], [], []) for _ in range(len(notes))]
+
+    notes_by_onset_index = np.array([i for _, i in notes_by_onset])
+    notes_by_onset_note = np.array([onset for onset, _ in notes_by_onset])
+
+    for i, n in enumerate(notes):
+        onset = n.onset_beat
+        offset = n.offset_beat
+        note_at_onset = notes_by_onset_index[np.searchsorted(notes_by_onset_note, onset, side='right') - 1]
+        for j in range(note_at_onset, len(notes)):
+            if j == i:
+                continue
+            if notes[j].onset_beat > offset + tol:
+                break
+            if abs(notes[j].onset_beat - offset) < tol:
+                neighbours[i].consecutive.append(j)
+            elif abs(notes[j].onset_beat - onset) < tol:
+                neighbours[i].concurrent.append(j)
+            elif notes[j].onset_beat < offset:
+                neighbours[i].overlap.append(j)
+
+        for j in range(note_at_onset - 1, -1, -1):
+            if j == i:
+                continue
+            if notes[j].onset_beat < onset - tol:
+                break
+            if abs(notes[j].onset_beat - onset) < tol:
+                neighbours[i].consecutive.append(j)
+    return neighbours

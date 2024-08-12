@@ -5,7 +5,7 @@ from functools import lru_cache
 import re
 
 class SimpleNote(tuple[
-        Literal["C", "D", "E", "F", "G", "A", "B"], int, Literal[-2, -1, 0, 1, 2]
+        Literal["C", "D", "E", "F", "G", "A", "B"], Literal[-2, -1, 0, 1, 2]
     ]):
     """A simplified representation of a note without any timing or absolute octave information."""
     _NOTE_LOOKUP: dict[str, tuple[Literal["C", "D", "E", "F", "G", "A", "B"], Literal[-2, -1, 0, 1, 2]]] = {
@@ -45,15 +45,40 @@ class SimpleNote(tuple[
         "B#": ("B", 1),
         "Bx": ("B", 2),
     }
-    def __new__(cls,
-                note: str,
-                relative_octave: int = 0,
-            ):
+
+    _INTERVAL_LOOKUP: dict[tuple[int, int], str] = {
+        (2, 0): "d2",
+        (2, 1): "m2",
+        (2, 2): "M2",
+        (2, 3): "A2",
+        (3, 2): "d3",
+        (3, 3): "m3",
+        (3, 4): "M3",
+        (3, 5): "A3",
+        (4, 4): "d4",
+        (4, 5): "P4",
+        (4, 6): "A4",
+        (5, 6): "d5",
+        (5, 7): "P5",
+        (5, 8): "A5",
+        (6, 7): "d6",
+        (6, 8): "m6",
+        (6, 9): "M6",
+        (6, 10): "A6",
+        (7, 9): "d7",
+        (7, 10): "m7",
+        (7, 11): "M7",
+        (7, 0): "A7",
+        (1, 11): "d8",
+        (1, 0): "P8",
+        (1, 1): "A8",
+    }
+    def __new__(cls, note: str,):
         # Just use a lookup table
         if note not in cls._NOTE_LOOKUP:
             raise ValueError(f"Invalid note {note}")
         note, sharps = cls._NOTE_LOOKUP[note]
-        return super().__new__(cls, (note, relative_octave, sharps))
+        return super().__new__(cls, (note, sharps))
 
     @property
     def step(self):
@@ -63,24 +88,30 @@ class SimpleNote(tuple[
     @property
     def note_name(self):
         """Returns the note name of the note"""
-        if self[1] < 0:
-            name = self.step + "_" * abs(self[1])
-        elif self[1] > 0:
-            name = self.step + "'" * self[1]
-        else:
-            name = self.step
-
         accidental = {
             -2: "bb",
             -1: "b",
             0: "",
             1: "#",
             2: "x"
-        }[self[2]]
-        return f"{name}{accidental}"
+        }[self[1]]
+        return f"{self.step}{accidental}"
 
     def __repr__(self):
         return f"SimpleNote({self.note_name})"
+
+    @property
+    def step_number(self):
+        """Returns the diatonic step number of the note. C is 0, D is 1, etc."""
+        return {
+            "C": 0,
+            "D": 1,
+            "E": 2,
+            "F": 3,
+            "G": 4,
+            "A": 5,
+            "B": 6
+        }[self.step]
 
     @property
     def pitch_number(self):
@@ -93,79 +124,117 @@ class SimpleNote(tuple[
             "G": 7,
             "A": 9,
             "B": 11
-        }[self.step] + self[1] * 12 + self[2]
+        }[self.step] + self[1]
 
-    def __lt__(self, value: SimpleNote) -> bool:
-        return self.pitch_number < value.pitch_number
+    def get_pitch_dist(self, other: SimpleNote) -> int:
+        """Returns the pitch distance between two notes, where we assume that the other note is higher than the current note."""
+        nsteps = other.step_number - self.step_number + 1
+        if nsteps < 1:
+            nsteps += 7
+        assert 1 <= nsteps <= 7
+        return nsteps
 
-MAJOR_SCALE = {
-    SimpleNote("C"): [SimpleNote("C"), SimpleNote("D"), SimpleNote("E"), SimpleNote("F"), SimpleNote("G"), SimpleNote("A"), SimpleNote("B")],
-    SimpleNote("G"): [SimpleNote("G"), SimpleNote("A"), SimpleNote("B"), SimpleNote("C"), SimpleNote("D"), SimpleNote("E"), SimpleNote("F#")],
-    SimpleNote("D"): [SimpleNote("D"), SimpleNote("E"), SimpleNote("F#"), SimpleNote("G"), SimpleNote("A"), SimpleNote("B"), SimpleNote("C#")],
-    SimpleNote("A"): [SimpleNote("A"), SimpleNote("B"), SimpleNote("C#"), SimpleNote("D"), SimpleNote("E"), SimpleNote("F#"), SimpleNote("G#")],
-    SimpleNote("E"): [SimpleNote("E"), SimpleNote("F#"), SimpleNote("G#"), SimpleNote("A"), SimpleNote("B"), SimpleNote("C#"), SimpleNote("D#")],
-    SimpleNote("B"): [SimpleNote("B"), SimpleNote("C#"), SimpleNote("D#"), SimpleNote("E"), SimpleNote("F#"), SimpleNote("G#"), SimpleNote("A#")],
-    SimpleNote("F#"): [SimpleNote("F#"), SimpleNote("G#"), SimpleNote("A#"), SimpleNote("B"), SimpleNote("C#"), SimpleNote("D#"), SimpleNote("E#")],
-    SimpleNote("C#"): [SimpleNote("C#"), SimpleNote("D#"), SimpleNote("E#"), SimpleNote("F#"), SimpleNote("G#"), SimpleNote("A#"), SimpleNote("B#")],
-    SimpleNote("F"): [SimpleNote("F"), SimpleNote("G"), SimpleNote("A"), SimpleNote("Bb"), SimpleNote("C"), SimpleNote("D"), SimpleNote("E")],
-    SimpleNote("Bb"): [SimpleNote("Bb"), SimpleNote("C"), SimpleNote("D"), SimpleNote("Eb"), SimpleNote("F"), SimpleNote("G"), SimpleNote("A")],
-    SimpleNote("Eb"): [SimpleNote("Eb"), SimpleNote("F"), SimpleNote("G"), SimpleNote("Ab"), SimpleNote("Bb"), SimpleNote("C"), SimpleNote("D")],
-    SimpleNote("Ab"): [SimpleNote("Ab"), SimpleNote("Bb"), SimpleNote("C"), SimpleNote("Db"), SimpleNote("Eb"), SimpleNote("F"), SimpleNote("G")],
-    SimpleNote("Db"): [SimpleNote("Db"), SimpleNote("Eb"), SimpleNote("F"), SimpleNote("Gb"), SimpleNote("Ab"), SimpleNote("Bb"), SimpleNote("C")],
-    SimpleNote("Gb"): [SimpleNote("Gb"), SimpleNote("Ab"), SimpleNote("Bb"), SimpleNote("Cb"), SimpleNote("Db"), SimpleNote("Eb"), SimpleNote("F")],
-    SimpleNote("Cb"): [SimpleNote("Cb"), SimpleNote("Db"), SimpleNote("Eb"), SimpleNote("Fb"), SimpleNote("Gb"), SimpleNote("Ab"), SimpleNote("Bb")],
-}
+    def get_semitone_dist(self, other: SimpleNote) -> int:
+        """Returns the semitone distance between two notes, mod 12, where we assume that the other note is higher than the current note."""
+        nsemitones = other.pitch_number - self.pitch_number
+        if nsemitones < 0:
+            nsemitones += 12
+        assert 0 <= nsemitones <= 11
+        return nsemitones
 
-HARMONIC_MINOR_SCALE = {
-    SimpleNote("A"): [SimpleNote("A"), SimpleNote("B"), SimpleNote("C"), SimpleNote("D"), SimpleNote("E"), SimpleNote("F"), SimpleNote("G#")],
-    SimpleNote("E"): [SimpleNote("E"), SimpleNote("F#"), SimpleNote("G"), SimpleNote("A"), SimpleNote("B"), SimpleNote("C"), SimpleNote("D#")],
-    SimpleNote("B"): [SimpleNote("B"), SimpleNote("C#"), SimpleNote("D"), SimpleNote("E"), SimpleNote("F#"), SimpleNote("G"), SimpleNote("A#")],
-    SimpleNote("F#"): [SimpleNote("F#"), SimpleNote("G#"), SimpleNote("A"), SimpleNote("B"), SimpleNote("C#"), SimpleNote("D"), SimpleNote("E#")],
-    SimpleNote("C#"): [SimpleNote("C#"), SimpleNote("D#"), SimpleNote("E"), SimpleNote("F#"), SimpleNote("G#"), SimpleNote("A"), SimpleNote("B#")],
-    SimpleNote("G#"): [SimpleNote("G#"), SimpleNote("A#"), SimpleNote("B"), SimpleNote("C#"), SimpleNote("D#"), SimpleNote("E"), SimpleNote("Fx")],
-    SimpleNote("D#"): [SimpleNote("D#"), SimpleNote("E#"), SimpleNote("F#"), SimpleNote("G#"), SimpleNote("A#"), SimpleNote("B"), SimpleNote("Cx")],
-    SimpleNote("A#"): [SimpleNote("A#"), SimpleNote("B#"), SimpleNote("C#"), SimpleNote("D#"), SimpleNote("E#"), SimpleNote("F#"), SimpleNote("Gx")],
-    SimpleNote("D"): [SimpleNote("D"), SimpleNote("E"), SimpleNote("F"), SimpleNote("G"), SimpleNote("A"), SimpleNote("Bb"), SimpleNote("C#")],
-    SimpleNote("G"): [SimpleNote("G"), SimpleNote("A"), SimpleNote("Bb"), SimpleNote("C"), SimpleNote("D"), SimpleNote("Eb"), SimpleNote("F#")],
-    SimpleNote("C"): [SimpleNote("C"), SimpleNote("D"), SimpleNote("Eb"), SimpleNote("F"), SimpleNote("G"), SimpleNote("Ab"), SimpleNote("B")],
-    SimpleNote("F"): [SimpleNote("F"), SimpleNote("G"), SimpleNote("Ab"), SimpleNote("Bb"), SimpleNote("C"), SimpleNote("Db"), SimpleNote("E")],
-    SimpleNote("Bb"): [SimpleNote("Bb"), SimpleNote("C"), SimpleNote("Db"), SimpleNote("Eb"), SimpleNote("F"), SimpleNote("Gb"), SimpleNote("A")],
-    SimpleNote("Eb"): [SimpleNote("Eb"), SimpleNote("F"), SimpleNote("Gb"), SimpleNote("Ab"), SimpleNote("Bb"), SimpleNote("Cb"), SimpleNote("D")],
-    SimpleNote("Ab"): [SimpleNote("Ab"), SimpleNote("Bb"), SimpleNote("Cb"), SimpleNote("Db"), SimpleNote("Eb"), SimpleNote("Fb"), SimpleNote("G")],
-}
+    def get_interval(self, other: SimpleNote) -> str:
+        """Returns the interval between two notes, where we assume that the other note is higher than the current note."""
+        # The stupid way to calculate the interval
+        nsteps = self.get_pitch_dist(other)
+        nsemitones = self.get_semitone_dist(other)
+        return self._INTERVAL_LOOKUP[(nsteps, nsemitones)]
 
-MELODIC_MINOR_UP = {
-    SimpleNote("A"): [SimpleNote("A"), SimpleNote("B"), SimpleNote("C"), SimpleNote("D"), SimpleNote("E"), SimpleNote("F#"), SimpleNote("G#")],
-    SimpleNote("E"): [SimpleNote("E"), SimpleNote("F#"), SimpleNote("G"), SimpleNote("A"), SimpleNote("B"), SimpleNote("C#"), SimpleNote("D#")],
-    SimpleNote("B"): [SimpleNote("B"), SimpleNote("C#"), SimpleNote("D"), SimpleNote("E"), SimpleNote("F#"), SimpleNote("G#"), SimpleNote("A#")],
-    SimpleNote("F#"): [SimpleNote("F#"), SimpleNote("G#"), SimpleNote("A"), SimpleNote("B"), SimpleNote("C#"), SimpleNote("D#"), SimpleNote("E#")],
-    SimpleNote("C#"): [SimpleNote("C#"), SimpleNote("D#"), SimpleNote("E"), SimpleNote("F#"), SimpleNote("G#"), SimpleNote("A#"), SimpleNote("B#")],
-    SimpleNote("G#"): [SimpleNote("G#"), SimpleNote("A#"), SimpleNote("B"), SimpleNote("C#"), SimpleNote("D#"), SimpleNote("E#"), SimpleNote("Fx")],
-    SimpleNote("D#"): [SimpleNote("D#"), SimpleNote("E#"), SimpleNote("F#"), SimpleNote("G#"), SimpleNote("A#"), SimpleNote("B#"), SimpleNote("Cx")],
-    SimpleNote("A#"): [SimpleNote("A#"), SimpleNote("B#"), SimpleNote("C#"), SimpleNote("D#"), SimpleNote("E#"), SimpleNote("F#"), SimpleNote("Gx")],
-    SimpleNote("D"): [SimpleNote("D"), SimpleNote("E"), SimpleNote("F"), SimpleNote("G"), SimpleNote("A"), SimpleNote("B"), SimpleNote("C#")],
-    SimpleNote("G"): [SimpleNote("G"), SimpleNote("A"), SimpleNote("Bb"), SimpleNote("C"), SimpleNote("D"), SimpleNote("E"), SimpleNote("F#")],
-    SimpleNote("C"): [SimpleNote("C"), SimpleNote("D"), SimpleNote("Eb"), SimpleNote("F"), SimpleNote("G"), SimpleNote("A"), SimpleNote("B")],
-    SimpleNote("F"): [SimpleNote("F"), SimpleNote("G"), SimpleNote("Ab"), SimpleNote("Bb"), SimpleNote("C"), SimpleNote("D"), SimpleNote("E")],
-    SimpleNote("Bb"): [SimpleNote("Bb"), SimpleNote("C"), SimpleNote("Db"), SimpleNote("Eb"), SimpleNote("F"), SimpleNote("G"), SimpleNote("A")],
-    SimpleNote("Eb"): [SimpleNote("Eb"), SimpleNote("F"), SimpleNote("Gb"), SimpleNote("Ab"), SimpleNote("Bb"), SimpleNote("C"), SimpleNote("D")],
-    SimpleNote("Ab"): [SimpleNote("Ab"), SimpleNote("Bb"), SimpleNote("Cb"), SimpleNote("Db"), SimpleNote("Eb"), SimpleNote("F"), SimpleNote("G")],
-}
+@lru_cache(maxsize=1)
+def get_supported_scales():
+    """Returns a list of supported scales."""
+    return [
+        "C Major",
+        "G Major",
+        "D Major",
+        "A Major",
+        "E Major",
+        "B Major",
+        "F# Major",
+        "C# Major",
+        "F Major",
+        "Bb Major",
+        "Eb Major",
+        "Ab Major",
+        "Db Major",
+        "Gb Major",
+        "Cb Major",
+        "A Minor",
+        "E Minor",
+        "B Minor",
+        "F# Minor",
+        "C# Minor",
+        "G# Minor",
+        "D# Minor",
+        "A# Minor",
+        "D Minor",
+        "G Minor",
+        "C Minor",
+        "F Minor",
+        "Bb Minor",
+        "Eb Minor",
+        "Ab Minor",
+    ]
 
-MELODIC_MINOR_DOWN = {
-    SimpleNote("A"): [SimpleNote("A"), SimpleNote("B"), SimpleNote("C"), SimpleNote("D"), SimpleNote("E"), SimpleNote("F"), SimpleNote("G")],
-    SimpleNote("E"): [SimpleNote("E"), SimpleNote("F#"), SimpleNote("G"), SimpleNote("A"), SimpleNote("B"), SimpleNote("C"), SimpleNote("D")],
-    SimpleNote("B"): [SimpleNote("B"), SimpleNote("C#"), SimpleNote("D"), SimpleNote("E"), SimpleNote("F#"), SimpleNote("G"), SimpleNote("A")],
-    SimpleNote("F#"): [SimpleNote("F#"), SimpleNote("G#"), SimpleNote("A"), SimpleNote("B"), SimpleNote("C#"), SimpleNote("D"), SimpleNote("E")],
-    SimpleNote("C#"): [SimpleNote("C#"), SimpleNote("D#"), SimpleNote("E"), SimpleNote("F#"), SimpleNote("G#"), SimpleNote("A"), SimpleNote("B")],
-    SimpleNote("G#"): [SimpleNote("G#"), SimpleNote("A#"), SimpleNote("B"), SimpleNote("C#"), SimpleNote("D#"), SimpleNote("E"), SimpleNote("F")],
-    SimpleNote("D#"): [SimpleNote("D#"), SimpleNote("E#"), SimpleNote("F#"), SimpleNote("G#"), SimpleNote("A#"), SimpleNote("B"), SimpleNote("C")],
-    SimpleNote("A#"): [SimpleNote("A#"), SimpleNote("B#"), SimpleNote("C#"), SimpleNote("D#"), SimpleNote("E#"), SimpleNote("F#"), SimpleNote("G")],
-    SimpleNote("D"): [SimpleNote("D"), SimpleNote("E"), SimpleNote("F"), SimpleNote("G"), SimpleNote("A"), SimpleNote("Bb"), SimpleNote("C")],
-    SimpleNote("G"): [SimpleNote("G"), SimpleNote("A"), SimpleNote("Bb"), SimpleNote("C"), SimpleNote("D"), SimpleNote("Eb"), SimpleNote("F")],
-    SimpleNote("C"): [SimpleNote("C"), SimpleNote("D"), SimpleNote("Eb"), SimpleNote("F"), SimpleNote("G"), SimpleNote("Ab"), SimpleNote("Bb")],
-    SimpleNote("F"): [SimpleNote("F"), SimpleNote("G"), SimpleNote("Ab"), SimpleNote("Bb"), SimpleNote("C"), SimpleNote("Db"), SimpleNote("Eb")],
-    SimpleNote("Bb"): [SimpleNote("Bb"), SimpleNote("C"), SimpleNote("Db"), SimpleNote("Eb"), SimpleNote("F"), SimpleNote("Gb"), SimpleNote("Ab")],
-    SimpleNote("Eb"): [SimpleNote("Eb"), SimpleNote("F"), SimpleNote("Gb"), SimpleNote("Ab"), SimpleNote("Bb"), SimpleNote("Cb"), SimpleNote("Db")],
-    SimpleNote("Ab"): [SimpleNote("Ab"), SimpleNote("Bb"), SimpleNote("Cb"), SimpleNote("Db"), SimpleNote("Eb"), SimpleNote("Fb"), SimpleNote("Gb")],
-}
+@lru_cache(maxsize=1)
+def get_scales():
+    """Returns a mapping of scale names to the notes in the scale."""
+    mapping = {
+        "C Major": [SimpleNote("C"), SimpleNote("D"), SimpleNote("E"), SimpleNote("F"), SimpleNote("G"), SimpleNote("A"), SimpleNote("B")],
+        "G Major": [SimpleNote("G"), SimpleNote("A"), SimpleNote("B"), SimpleNote("C"), SimpleNote("D"), SimpleNote("E"), SimpleNote("F#")],
+        "D Major": [SimpleNote("D"), SimpleNote("E"), SimpleNote("F#"), SimpleNote("G"), SimpleNote("A"), SimpleNote("B"), SimpleNote("C#")],
+        "A Major": [SimpleNote("A"), SimpleNote("B"), SimpleNote("C#"), SimpleNote("D"), SimpleNote("E"), SimpleNote("F#"), SimpleNote("G#")],
+        "E Major": [SimpleNote("E"), SimpleNote("F#"), SimpleNote("G#"), SimpleNote("A"), SimpleNote("B"), SimpleNote("C#"), SimpleNote("D#")],
+        "B Major": [SimpleNote("B"), SimpleNote("C#"), SimpleNote("D#"), SimpleNote("E"), SimpleNote("F#"), SimpleNote("G#"), SimpleNote("A#")],
+        "F# Major": [SimpleNote("F#"), SimpleNote("G#"), SimpleNote("A#"), SimpleNote("B"), SimpleNote("C#"), SimpleNote("D#"), SimpleNote("E#")],
+        "C# Major": [SimpleNote("C#"), SimpleNote("D#"), SimpleNote("E#"), SimpleNote("F#"), SimpleNote("G#"), SimpleNote("A#"), SimpleNote("B#")],
+        "F Major": [SimpleNote("F"), SimpleNote("G"), SimpleNote("A"), SimpleNote("Bb"), SimpleNote("C"), SimpleNote("D"), SimpleNote("E")],
+        "Bb Major": [SimpleNote("Bb"), SimpleNote("C"), SimpleNote("D"), SimpleNote("Eb"), SimpleNote("F"), SimpleNote("G"), SimpleNote("A")],
+        "Eb Major": [SimpleNote("Eb"), SimpleNote("F"), SimpleNote("G"), SimpleNote("Ab"), SimpleNote("Bb"), SimpleNote("C"), SimpleNote("D")],
+        "Ab Major": [SimpleNote("Ab"), SimpleNote("Bb"), SimpleNote("C"), SimpleNote("Db"), SimpleNote("Eb"), SimpleNote("F"), SimpleNote("G")],
+        "Db Major": [SimpleNote("Db"), SimpleNote("Eb"), SimpleNote("F"), SimpleNote("Gb"), SimpleNote("Ab"), SimpleNote("Bb"), SimpleNote("C")],
+        "Gb Major": [SimpleNote("Gb"), SimpleNote("Ab"), SimpleNote("Bb"), SimpleNote("Cb"), SimpleNote("Db"), SimpleNote("Eb"), SimpleNote("F")],
+        "Cb Major": [SimpleNote("Cb"), SimpleNote("Db"), SimpleNote("Eb"), SimpleNote("Fb"), SimpleNote("Gb"), SimpleNote("Ab"), SimpleNote("Bb")],
+        "A Minor": [SimpleNote("A"), SimpleNote("B"), SimpleNote("C"), SimpleNote("D"), SimpleNote("E"), SimpleNote("F"), SimpleNote("G#")],
+        "E Minor": [SimpleNote("E"), SimpleNote("F#"), SimpleNote("G"), SimpleNote("A"), SimpleNote("B"), SimpleNote("C"), SimpleNote("D#")],
+        "B Minor": [SimpleNote("B"), SimpleNote("C#"), SimpleNote("D"), SimpleNote("E"), SimpleNote("F#"), SimpleNote("G"), SimpleNote("A#")],
+        "F# Minor": [SimpleNote("F#"), SimpleNote("G#"), SimpleNote("A"), SimpleNote("B"), SimpleNote("C#"), SimpleNote("D"), SimpleNote("E#")],
+        "C# Minor": [SimpleNote("C#"), SimpleNote("D#"), SimpleNote("E"), SimpleNote("F#"), SimpleNote("G#"), SimpleNote("A"), SimpleNote("B#")],
+        "G# Minor": [SimpleNote("G#"), SimpleNote("A#"), SimpleNote("B"), SimpleNote("C#"), SimpleNote("D#"), SimpleNote("E"), SimpleNote("Fx")],
+        "D# Minor": [SimpleNote("D#"), SimpleNote("E#"), SimpleNote("F#"), SimpleNote("G#"), SimpleNote("A#"), SimpleNote("B"), SimpleNote("Cx")],
+        "A# Minor": [SimpleNote("A#"), SimpleNote("B#"), SimpleNote("C#"), SimpleNote("D#"), SimpleNote("E#"), SimpleNote("F#"), SimpleNote("Gx")],
+        "D Minor": [SimpleNote("D"), SimpleNote("E"), SimpleNote("F"), SimpleNote("G"), SimpleNote("A"), SimpleNote("Bb"), SimpleNote("C#")],
+        "G Minor": [SimpleNote("G"), SimpleNote("A"), SimpleNote("Bb"), SimpleNote("C"), SimpleNote("D"), SimpleNote("Eb"), SimpleNote("F#")],
+        "C Minor": [SimpleNote("C"), SimpleNote("D"), SimpleNote("Eb"), SimpleNote("F"), SimpleNote("G"), SimpleNote("Ab"), SimpleNote("B")],
+        "F Minor": [SimpleNote("F"), SimpleNote("G"), SimpleNote("Ab"), SimpleNote("Bb"), SimpleNote("C"), SimpleNote("Db"), SimpleNote("E")],
+        "Bb Minor": [SimpleNote("Bb"), SimpleNote("C"), SimpleNote("Db"), SimpleNote("Eb"), SimpleNote("F"), SimpleNote("Gb"), SimpleNote("A")],
+        "Eb Minor": [SimpleNote("Eb"), SimpleNote("F"), SimpleNote("Gb"), SimpleNote("Ab"), SimpleNote("Bb"), SimpleNote("Cb"), SimpleNote("D")],
+        "Ab Minor": [SimpleNote("Ab"), SimpleNote("Bb"), SimpleNote("Cb"), SimpleNote("Db"), SimpleNote("Eb"), SimpleNote("Fb"), SimpleNote("G")],
+    }
+
+    # Perform some sanity checks
+    for scale, notes in mapping.items():
+        if len(notes) != 7:
+            raise ValueError(f"Invalid scale {scale}")
+
+        difference = [notes[i].get_interval(notes[i+1]) for i in range(6)] + [notes[6].get_interval(notes[0])]
+        if "Major" in scale:
+            assert difference == ["M2", "M2", "m2", "M2", "M2", "M2", "m2"]
+
+        elif "Minor" in scale:
+            assert difference == ["M2", "m2", "M2", "M2", "m2", "A2", "m2"]
+
+        else:
+            raise ValueError(f"Invalid scale {scale}")
+
+    assert set(mapping.keys()) == set(get_supported_scales())
+    return mapping

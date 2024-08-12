@@ -10,6 +10,7 @@ from music21 import corpus, converter
 from src.analysis.melody import _sanitize_as_melody
 from src.analysis.voices import separate_voices
 from src.analysis.harmony import chordify_cleanup
+from src.analysis.scales import SimpleNote, get_scales
 import numpy as np
 
 def test_note_transposition():
@@ -116,3 +117,41 @@ def test_chordify_cleanup():
     assert ccs.get_measure(1, 10)._data.recurse().notes[1].tie is None
     assert ccs.get_measure(1, 10)._data.recurse().notes[0].expressions == []
     assert ccs.get_measure(1, 10)._data.recurse().notes[0].articulations == []
+
+def test_simple_note():
+    assert SimpleNote("A").note_name == "A"
+    assert SimpleNote("A#").note_name == "A#"
+    assert SimpleNote("Ab").note_name == "Ab"
+    assert SimpleNote("A").step == "A"
+    assert SimpleNote("Ax").step == "A"
+    assert SimpleNote("A").pitch_number == 9
+    assert SimpleNote("A#").pitch_number == 10
+    assert SimpleNote("Ab").pitch_number == 8
+    assert SimpleNote("A").step_number == 5
+    assert SimpleNote("A#").step_number == 5
+    assert SimpleNote("Ab").step_number == 5
+
+def test_simple_note_interval():
+    assert SimpleNote("A").get_interval(SimpleNote("B")) == "M2"
+    assert SimpleNote("A").get_interval(SimpleNote("C")) == "m3"
+    assert SimpleNote("A").get_interval(SimpleNote("D")) == "P4"
+    assert SimpleNote("A").get_interval(SimpleNote("E")) == "P5"
+    assert SimpleNote("A").get_interval(SimpleNote("F")) == "m6"
+    assert SimpleNote("A").get_interval(SimpleNote("G")) == "m7"
+    assert SimpleNote("A").get_interval(SimpleNote("A")) == "P8"
+    assert SimpleNote("A#").get_interval(SimpleNote("C#")) == "m3"
+    assert SimpleNote("Ax").get_interval(SimpleNote("C#")) == "d3"
+    assert SimpleNote("A#").get_interval(SimpleNote("D")) == "d4"
+    assert SimpleNote("A#").get_interval(SimpleNote("E")) == "d5"
+    assert SimpleNote("Ab").get_interval(SimpleNote("D")) == "A4"
+    assert SimpleNote("G#").get_interval(SimpleNote("D")) == "d5"
+    assert SimpleNote("G#").get_interval(SimpleNote("E")) == "m6"
+    assert SimpleNote("Ab").get_interval(SimpleNote("F#")) == "A6"
+    assert SimpleNote("Ab").get_interval(SimpleNote("G#")) == "A7"
+    assert SimpleNote("Ab").get_interval(SimpleNote("Ab")) == "P8"
+    assert SimpleNote("Ab").get_interval(SimpleNote("A")) == "A8"
+    assert SimpleNote("C").get_interval(SimpleNote("B")) == "M7"
+    assert SimpleNote("B").get_interval(SimpleNote("C")) == "m2"
+
+def test_get_scales():
+    get_scales()

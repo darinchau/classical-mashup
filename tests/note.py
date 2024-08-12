@@ -8,7 +8,8 @@ from music21.stream.base import Part, Measure, Score
 from music21.meter.base import TimeSignature
 from music21 import corpus, converter
 from src.analysis.melody import _sanitize_as_melody
-from src.analysis.voices import separate_voices, measures_all_rest
+from src.analysis.voices import separate_voices
+from src.analysis.harmony import chordify_cleanup
 import numpy as np
 
 def test_note_transposition():
@@ -99,3 +100,19 @@ def test_separate_voices():
     s._sanitize_in_place()
     s2 = separate_voices(s)
     assert len(list(s2._data)) == 3
+
+def test_chordify_cleanup():
+    score = M21Score.parse("-test.1079")
+    score._sanitize_in_place()
+
+    ccs = chordify_cleanup(score)
+
+    # To check that the chordify_cleanup function cleans up the notes correctly
+    assert len(ccs.get_measure(1, 29)._data.recurse().notes[3].pitches) == 2
+    assert len(ccs.get_measure(1, 29)._data.recurse().notes[4].pitches) == 2
+
+    # Check the ties are removed
+    assert ccs.get_measure(1, 10)._data.recurse().notes[0].tie is None
+    assert ccs.get_measure(1, 10)._data.recurse().notes[1].tie is None
+    assert ccs.get_measure(1, 10)._data.recurse().notes[0].expressions == []
+    assert ccs.get_measure(1, 10)._data.recurse().notes[0].articulations == []

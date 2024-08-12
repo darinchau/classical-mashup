@@ -127,6 +127,8 @@ def test_simple_note():
     assert SimpleNote("A").pitch_number == 9
     assert SimpleNote("A#").pitch_number == 10
     assert SimpleNote("Ab").pitch_number == 8
+    assert SimpleNote("B#").pitch_number == 0
+    assert SimpleNote("Cbb").pitch_number == 10
     assert SimpleNote("A").step_number == 5
     assert SimpleNote("A#").step_number == 5
     assert SimpleNote("Ab").step_number == 5
@@ -152,6 +154,7 @@ def test_simple_note_interval():
     assert SimpleNote("Ab").get_interval(SimpleNote("A")) == "A8"
     assert SimpleNote("C").get_interval(SimpleNote("B")) == "M7"
     assert SimpleNote("B").get_interval(SimpleNote("C")) == "m2"
+    assert SimpleNote("B#").get_interval(SimpleNote("Cb")) == "Unknown" # Make sure doesnt throw error
 
 def test_get_scales():
     get_scales()

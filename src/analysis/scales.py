@@ -115,8 +115,8 @@ class SimpleNote(tuple[
 
     @property
     def pitch_number(self):
-        """Let SimpleNote(C) = 0, returns the pitch number of the note"""
-        return {
+        """Let SimpleNote(C) = 0, returns the pitch number of the note."""
+        return ({
             "C": 0,
             "D": 2,
             "E": 4,
@@ -124,7 +124,7 @@ class SimpleNote(tuple[
             "G": 7,
             "A": 9,
             "B": 11
-        }[self.step] + self[1]
+        }[self.step] + self[1]) % 12
 
     def get_pitch_dist(self, other: SimpleNote) -> int:
         """Returns the pitch distance between two notes, where we assume that the other note is higher than the current note."""
@@ -143,14 +143,18 @@ class SimpleNote(tuple[
         return nsemitones
 
     def get_interval(self, other: SimpleNote) -> str:
-        """Returns the interval between two notes, where we assume that the other note is higher than the current note."""
+        """Returns the interval between two notes, where we assume that the other note is higher than the current note.
+        If the interval is weird enough like a double augmented second, we return "Unknown"."""
         # The stupid way to calculate the interval
         nsteps = self.get_pitch_dist(other)
         nsemitones = self.get_semitone_dist(other)
-        return self._INTERVAL_LOOKUP[(nsteps, nsemitones)]
+        lookup = (nsteps, nsemitones)
+        if lookup not in self._INTERVAL_LOOKUP:
+            return "Unknown"
+        return self._INTERVAL_LOOKUP[lookup]
 
 @lru_cache(maxsize=1)
-def get_supported_scales():
+def get_supported_scale_names():
     """Returns a list of supported scales."""
     return [
         "C Major",
@@ -236,5 +240,5 @@ def get_scales():
         else:
             raise ValueError(f"Invalid scale {scale}")
 
-    assert set(mapping.keys()) == set(get_supported_scales())
+    assert set(mapping.keys()) == set(get_supported_scale_names())
     return mapping

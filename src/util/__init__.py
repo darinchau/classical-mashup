@@ -19,3 +19,5 @@ def is_ipython():
         return True
     except NameError:
         return False
+
+NATURAL = "♮"

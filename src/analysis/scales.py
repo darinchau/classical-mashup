@@ -3,6 +3,10 @@ from __future__ import annotations
 from typing import Literal
 from functools import lru_cache
 import re
+import music21 as m21
+
+class ChordLabel(m21.note.Lyric):
+    pass
 
 class SimpleNote(tuple[
         Literal["C", "D", "E", "F", "G", "A", "B"], Literal[-2, -1, 0, 1, 2]
@@ -86,6 +90,11 @@ class SimpleNote(tuple[
         return self[0]
 
     @property
+    def alter(self):
+        """Returns the accidental of the note"""
+        return self[1]
+
+    @property
     def note_name(self):
         """Returns the note name of the note"""
         accidental = {
@@ -145,13 +154,22 @@ class SimpleNote(tuple[
     def get_interval(self, other: SimpleNote) -> str:
         """Returns the interval between two notes, where we assume that the other note is higher than the current note.
         If the interval is weird enough like a double augmented second, we return "Unknown"."""
-        # The stupid way to calculate the interval
         nsteps = self.get_pitch_dist(other)
         nsemitones = self.get_semitone_dist(other)
         lookup = (nsteps, nsemitones)
         if lookup not in self._INTERVAL_LOOKUP:
             return "Unknown"
         return self._INTERVAL_LOOKUP[lookup]
+
+    @classmethod
+    def from_pitch(cls, pitch: m21.pitch.Pitch) -> SimpleNote:
+        """Creates a SimpleNote from a music21 pitch."""
+        return cls(pitch.name.replace("-", "b").replace("##", "x"))
+
+    @classmethod
+    def from_note(cls, note: m21.note.Note) -> SimpleNote:
+        """Creates a SimpleNote from a music21 note."""
+        return cls.from_pitch(note.pitch)
 
 @lru_cache(maxsize=1)
 def get_supported_scale_names():
@@ -191,7 +209,7 @@ def get_supported_scale_names():
 
 @lru_cache(maxsize=1)
 def get_scales():
-    """Returns a mapping of scale names to the notes in the scale."""
+    """Returns a mapping of scale names to the notes in the scale. Majors are majors and minors are harmonic minors."""
     mapping = {
         "C Major": [SimpleNote("C"), SimpleNote("D"), SimpleNote("E"), SimpleNote("F"), SimpleNote("G"), SimpleNote("A"), SimpleNote("B")],
         "G Major": [SimpleNote("G"), SimpleNote("A"), SimpleNote("B"), SimpleNote("C"), SimpleNote("D"), SimpleNote("E"), SimpleNote("F#")],

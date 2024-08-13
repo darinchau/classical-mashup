@@ -9,8 +9,8 @@ from music21.meter.base import TimeSignature
 from music21 import corpus, converter
 from src.analysis.melody import _sanitize_as_melody
 from src.analysis.voices import separate_voices
-from src.analysis.harmony import chordify_cleanup
-from src.analysis.scales import SimpleNote, get_scales
+from src.analysis.harmony import chordify_cleanup, label_obvious_chords
+from src.analysis.scales import SimpleNote
 import numpy as np
 
 def test_note_transposition():
@@ -156,5 +156,27 @@ def test_simple_note_interval():
     assert SimpleNote("B").get_interval(SimpleNote("C")) == "m2"
     assert SimpleNote("B#").get_interval(SimpleNote("Cb")) == "Unknown" # Make sure doesnt throw error
 
-def test_get_scales():
-    get_scales()
+def test_figured_bass_obvious():
+    s = M21Score.parse("-test.fugue")
+    s._sanitize_in_place()
+    ccs = chordify_cleanup(s)
+    m = ccs.get_measure(0, 6)
+    notes = m._data.notesAndRests
+
+    assert label_obvious_chords(notes[0], 'C Major').text == '3'     # C, A, F
+    assert label_obvious_chords(notes[1], 'C Major').text == 'UN'    # C, A, G, F
+    assert label_obvious_chords(notes[2], 'C Major').text == '6'     # A, D, F
+    assert label_obvious_chords(notes[3], 'C Major').text == '7'     # B, G, D, F
+    assert label_obvious_chords(notes[4], 'C Major').text == '6\n4'  # B, D, F
+    assert label_obvious_chords(notes[5], 'C Major').text == '6'     # C, G, E
+    assert label_obvious_chords(notes[6], 'C Major').text == '6'     # C, G, E
+    assert label_obvious_chords(notes[7], 'C Major').text == '6'     # C, A, F
+    assert label_obvious_chords(notes[8], 'C Major').text == '3'     # C, A, E
+    assert label_obvious_chords(notes[9], 'C Major').text == '7'     # C, D, F
+    assert label_obvious_chords(notes[10], 'C Major').text == '7'    # C, A, D, F
+    assert label_obvious_chords(notes[11], 'C Major').text == 'UN'   # B, G, D, C
+    assert label_obvious_chords(notes[12], 'C Major').text == 'UN'   # C, G, D
+    assert label_obvious_chords(notes[13], 'C Major').text == '3'    # B, G, D
+    assert label_obvious_chords(notes[14], 'C Major').text == 'UN'   # B, A, G, D
+    assert label_obvious_chords(notes[15], 'C Major').text == '3'    # B, G, D
+    assert label_obvious_chords(notes[16], 'C Major').text == '4\n2' # B, G, D, F

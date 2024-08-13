@@ -4,107 +4,97 @@ from typing import Literal
 from functools import lru_cache
 import re
 import music21 as m21
+import numpy as np
+import typing
 
 class ChordLabel(m21.note.Lyric):
+    """A class that represents a chord label. Subclasses music21.note.Lyric so it can be added onto a note."""
     pass
 
-class SimpleNote(tuple[
-        Literal["C", "D", "E", "F", "G", "A", "B"], Literal[-2, -1, 0, 1, 2]
-    ]):
+_IS_SCALE_NAME = re.compile(r"^[CDEFGAB](#|x|b{1,2})? M(ajor|inor|inorN)$")
+
+LINE_OF_FIFTH = np.array([
+    ("Fbb", "", -2, 3, -14),
+    ("Cbb", "", -2, 10, -14),
+    ("Gbb", "", -2, 5, -13),
+    ("Dbb", "d2", -2, 0, -12),
+    ("Abb", "d6", -2, 7, -11),
+    ("Ebb", "d3", -2, 2, -10),
+    ("Bbb", "d7", -2, 9, -9),
+    ("Fb", "d4", -1, 4, -8),
+    ("Cb", "d8", -1, 11, -7),
+    ("Gb", "d5", -1, 6, -6),
+    ("Db", "m2", -1, 1, -5),
+    ("Ab", "m6", -1, 8, -4),
+    ("Eb", "m3", -1, 3, -3),
+    ("Bb", "m7", -1, 10,- 2),
+    ("F", "P4", 0, 5, -1),
+    ("C", "P8", 0, 0, 0),
+    ("G", "P5", 0, 7, 1),
+    ("D", "M2", 0, 2, 2),
+    ("A", "M6", 0, 9, 3),
+    ("E", "M3", 0, 4, 4),
+    ("B", "M7", 0, 11, 5),
+    ("F#", "A4", 1, 6, 6),
+    ("C#", "A8", 1, 1, 7),
+    ("G#", "A5", 1, 8, 8),
+    ("D#", "A2", 1, 3, 9),
+    ("A#", "A6", 1, 10, 10),
+    ("E#", "A3", 1, 5, 11),
+    ("B#", "A7", 1, 0, 12),
+    ("Fx", "", 2, 7, 13),
+    ("Cx", "", 2, 2, 14),
+    ("Gx", "", 2, 9, 15),
+    ("Dx", "", 2, 4, 16),
+    ("Ax", "", 2, 11, 17),
+    ("Ex", "", 2, 6, 18),
+    ("Bx", "", 2, 1, 19),
+], dtype=[
+    ("note_name", np.str_, 3), # note name
+    ("transposition", np.str_, 2), # transposition wrt C
+    ("alter", np.int8), # number of sharps added to the note
+    ("semitones", np.int8), # number of semitones from C
+    ("index", np.int8), # number of notes from C on the circle of fifths
+])
+
+class SimpleNote:
     """A simplified representation of a note without any timing or absolute octave information."""
-    _NOTE_LOOKUP: dict[str, tuple[Literal["C", "D", "E", "F", "G", "A", "B"], Literal[-2, -1, 0, 1, 2]]] = {
-        "Cbb": ("C", -2),
-        "Cb": ("C", -1),
-        "C": ("C", 0),
-        "C#": ("C", 1),
-        "Cx": ("C", 2),
-        "Dbb": ("D", -2),
-        "Db": ("D", -1),
-        "D": ("D", 0),
-        "D#": ("D", 1),
-        "Dx": ("D", 2),
-        "Ebb": ("E", -2),
-        "Eb": ("E", -1),
-        "E": ("E", 0),
-        "E#": ("E", 1),
-        "Ex": ("E", 2),
-        "Fbb": ("F", -2),
-        "Fb": ("F", -1),
-        "F": ("F", 0),
-        "F#": ("F", 1),
-        "Fx": ("F", 2),
-        "Gbb": ("G", -2),
-        "Gb": ("G", -1),
-        "G": ("G", 0),
-        "G#": ("G", 1),
-        "Gx": ("G", 2),
-        "Abb": ("A", -2),
-        "Ab": ("A", -1),
-        "A": ("A", 0),
-        "A#": ("A", 1),
-        "Ax": ("A", 2),
-        "Bbb": ("B", -2),
-        "Bb": ("B", -1),
-        "B": ("B", 0),
-        "B#": ("B", 1),
-        "Bx": ("B", 2),
-    }
+    __slots__ = ("_entry",)
+    def __init__(self, entry: str | int | np.ndarray):
+        if isinstance(entry, np.ndarray) and entry.dtype == LINE_OF_FIFTH.dtype and entry.size == 1:
+            self._entry = entry[0]
 
-    _INTERVAL_LOOKUP: dict[tuple[int, int], str] = {
-        (2, 0): "d2",
-        (2, 1): "m2",
-        (2, 2): "M2",
-        (2, 3): "A2",
-        (3, 2): "d3",
-        (3, 3): "m3",
-        (3, 4): "M3",
-        (3, 5): "A3",
-        (4, 4): "d4",
-        (4, 5): "P4",
-        (4, 6): "A4",
-        (5, 6): "d5",
-        (5, 7): "P5",
-        (5, 8): "A5",
-        (6, 7): "d6",
-        (6, 8): "m6",
-        (6, 9): "M6",
-        (6, 10): "A6",
-        (7, 9): "d7",
-        (7, 10): "m7",
-        (7, 11): "M7",
-        (7, 0): "A7",
-        (1, 11): "d8",
-        (1, 0): "P8",
-        (1, 1): "A8",
-    }
-    def __new__(cls, note: str,):
-        # Just use a lookup table
-        if note not in cls._NOTE_LOOKUP:
-            raise ValueError(f"Invalid note {note}")
-        note, sharps = cls._NOTE_LOOKUP[note]
-        return super().__new__(cls, (note, sharps))
+        elif isinstance(entry, np.void) and entry.dtype == LINE_OF_FIFTH.dtype:
+            self._entry = typing.cast(np.ndarray, entry) # Just to make type checker happy
+
+        elif isinstance(entry, int):
+            self._entry = LINE_OF_FIFTH[entry]
+
+        elif isinstance(entry, str):
+            entry_ = LINE_OF_FIFTH[LINE_OF_FIFTH["note_name"] == entry]
+            if entry_.size == 0:
+                raise ValueError(f"Invalid note name {entry}")
+            self._entry = entry_[0]
+        else:
+            raise ValueError(f"Invalid entry {entry}")
+
+        # TODO perform validation if necessary
+        ...
 
     @property
-    def step(self):
+    def step(self) -> str:
         """Returns the diatonic step of the note"""
-        return self[0]
+        return self._entry["note_name"].item()[0]
 
     @property
-    def alter(self):
+    def alter(self) -> int:
         """Returns the accidental of the note"""
-        return self[1]
+        return self._entry["alter"].item()
 
     @property
-    def note_name(self):
+    def note_name(self) -> str:
         """Returns the note name of the note"""
-        accidental = {
-            -2: "bb",
-            -1: "b",
-            0: "",
-            1: "#",
-            2: "x"
-        }[self[1]]
-        return f"{self.step}{accidental}"
+        return self._entry["note_name"].item()
 
     def __repr__(self):
         return f"SimpleNote({self.note_name})"
@@ -123,43 +113,26 @@ class SimpleNote(tuple[
         }[self.step]
 
     @property
-    def pitch_number(self):
+    def pitch_number(self) -> int:
         """Let SimpleNote(C) = 0, returns the pitch number of the note."""
-        return ({
-            "C": 0,
-            "D": 2,
-            "E": 4,
-            "F": 5,
-            "G": 7,
-            "A": 9,
-            "B": 11
-        }[self.step] + self[1]) % 12
-
-    def get_pitch_dist(self, other: SimpleNote) -> int:
-        """Returns the pitch distance between two notes, where we assume that the other note is higher than the current note."""
-        nsteps = other.step_number - self.step_number + 1
-        if nsteps < 1:
-            nsteps += 7
-        assert 1 <= nsteps <= 7
-        return nsteps
-
-    def get_semitone_dist(self, other: SimpleNote) -> int:
-        """Returns the semitone distance between two notes, mod 12, where we assume that the other note is higher than the current note."""
-        nsemitones = other.pitch_number - self.pitch_number
-        if nsemitones < 0:
-            nsemitones += 12
-        assert 0 <= nsemitones <= 11
-        return nsemitones
+        return self._entry["semitones"].item()
 
     def get_interval(self, other: SimpleNote) -> str:
         """Returns the interval between two notes, where we assume that the other note is higher than the current note.
         If the interval is weird enough like a double augmented second, we return "Unknown"."""
-        nsteps = self.get_pitch_dist(other)
-        nsemitones = self.get_semitone_dist(other)
-        lookup = (nsteps, nsemitones)
-        if lookup not in self._INTERVAL_LOOKUP:
+        diff = other._entry["index"] - self._entry["index"]
+        if diff < -14 or diff > 19:
             return "Unknown"
-        return self._INTERVAL_LOOKUP[lookup]
+        interval = LINE_OF_FIFTH[LINE_OF_FIFTH["index"] == diff][0]["transposition"]
+        return interval
+
+    def transpose(self, interval: str) -> SimpleNote:
+        """Transposes the note by a given interval."""
+        transpotition_entry = LINE_OF_FIFTH["transposition"] == interval
+        if transpotition_entry.size == 0:
+            raise ValueError(f"Invalid interval {interval}")
+        interval_entry = LINE_OF_FIFTH[transpotition_entry][0]
+        return SimpleNote(LINE_OF_FIFTH[LINE_OF_FIFTH["index"] == interval_entry["index"] + self._entry["index"]][0])
 
     @classmethod
     def from_pitch(cls, pitch: m21.pitch.Pitch) -> SimpleNote:
@@ -171,92 +144,27 @@ class SimpleNote(tuple[
         """Creates a SimpleNote from a music21 note."""
         return cls.from_pitch(note.pitch)
 
-@lru_cache(maxsize=1)
-def get_supported_scale_names():
+    def __eq__(self, other: SimpleNote):
+        return self._entry["index"] == other._entry["index"]
+
+def is_scale_supported(scale: str):
     """Returns a list of supported scales."""
-    return [
-        "C Major",
-        "G Major",
-        "D Major",
-        "A Major",
-        "E Major",
-        "B Major",
-        "F# Major",
-        "C# Major",
-        "F Major",
-        "Bb Major",
-        "Eb Major",
-        "Ab Major",
-        "Db Major",
-        "Gb Major",
-        "Cb Major",
-        "A Minor",
-        "E Minor",
-        "B Minor",
-        "F# Minor",
-        "C# Minor",
-        "G# Minor",
-        "D# Minor",
-        "A# Minor",
-        "D Minor",
-        "G Minor",
-        "C Minor",
-        "F Minor",
-        "Bb Minor",
-        "Eb Minor",
-        "Ab Minor",
-    ]
+    return _IS_SCALE_NAME.match(scale) is not None
 
-@lru_cache(maxsize=1)
-def get_scales():
-    """Returns a mapping of scale names to the notes in the scale. Majors are majors and minors are harmonic minors."""
-    mapping = {
-        "C Major": [SimpleNote("C"), SimpleNote("D"), SimpleNote("E"), SimpleNote("F"), SimpleNote("G"), SimpleNote("A"), SimpleNote("B")],
-        "G Major": [SimpleNote("G"), SimpleNote("A"), SimpleNote("B"), SimpleNote("C"), SimpleNote("D"), SimpleNote("E"), SimpleNote("F#")],
-        "D Major": [SimpleNote("D"), SimpleNote("E"), SimpleNote("F#"), SimpleNote("G"), SimpleNote("A"), SimpleNote("B"), SimpleNote("C#")],
-        "A Major": [SimpleNote("A"), SimpleNote("B"), SimpleNote("C#"), SimpleNote("D"), SimpleNote("E"), SimpleNote("F#"), SimpleNote("G#")],
-        "E Major": [SimpleNote("E"), SimpleNote("F#"), SimpleNote("G#"), SimpleNote("A"), SimpleNote("B"), SimpleNote("C#"), SimpleNote("D#")],
-        "B Major": [SimpleNote("B"), SimpleNote("C#"), SimpleNote("D#"), SimpleNote("E"), SimpleNote("F#"), SimpleNote("G#"), SimpleNote("A#")],
-        "F# Major": [SimpleNote("F#"), SimpleNote("G#"), SimpleNote("A#"), SimpleNote("B"), SimpleNote("C#"), SimpleNote("D#"), SimpleNote("E#")],
-        "C# Major": [SimpleNote("C#"), SimpleNote("D#"), SimpleNote("E#"), SimpleNote("F#"), SimpleNote("G#"), SimpleNote("A#"), SimpleNote("B#")],
-        "F Major": [SimpleNote("F"), SimpleNote("G"), SimpleNote("A"), SimpleNote("Bb"), SimpleNote("C"), SimpleNote("D"), SimpleNote("E")],
-        "Bb Major": [SimpleNote("Bb"), SimpleNote("C"), SimpleNote("D"), SimpleNote("Eb"), SimpleNote("F"), SimpleNote("G"), SimpleNote("A")],
-        "Eb Major": [SimpleNote("Eb"), SimpleNote("F"), SimpleNote("G"), SimpleNote("Ab"), SimpleNote("Bb"), SimpleNote("C"), SimpleNote("D")],
-        "Ab Major": [SimpleNote("Ab"), SimpleNote("Bb"), SimpleNote("C"), SimpleNote("Db"), SimpleNote("Eb"), SimpleNote("F"), SimpleNote("G")],
-        "Db Major": [SimpleNote("Db"), SimpleNote("Eb"), SimpleNote("F"), SimpleNote("Gb"), SimpleNote("Ab"), SimpleNote("Bb"), SimpleNote("C")],
-        "Gb Major": [SimpleNote("Gb"), SimpleNote("Ab"), SimpleNote("Bb"), SimpleNote("Cb"), SimpleNote("Db"), SimpleNote("Eb"), SimpleNote("F")],
-        "Cb Major": [SimpleNote("Cb"), SimpleNote("Db"), SimpleNote("Eb"), SimpleNote("Fb"), SimpleNote("Gb"), SimpleNote("Ab"), SimpleNote("Bb")],
-        "A Minor": [SimpleNote("A"), SimpleNote("B"), SimpleNote("C"), SimpleNote("D"), SimpleNote("E"), SimpleNote("F"), SimpleNote("G#")],
-        "E Minor": [SimpleNote("E"), SimpleNote("F#"), SimpleNote("G"), SimpleNote("A"), SimpleNote("B"), SimpleNote("C"), SimpleNote("D#")],
-        "B Minor": [SimpleNote("B"), SimpleNote("C#"), SimpleNote("D"), SimpleNote("E"), SimpleNote("F#"), SimpleNote("G"), SimpleNote("A#")],
-        "F# Minor": [SimpleNote("F#"), SimpleNote("G#"), SimpleNote("A"), SimpleNote("B"), SimpleNote("C#"), SimpleNote("D"), SimpleNote("E#")],
-        "C# Minor": [SimpleNote("C#"), SimpleNote("D#"), SimpleNote("E"), SimpleNote("F#"), SimpleNote("G#"), SimpleNote("A"), SimpleNote("B#")],
-        "G# Minor": [SimpleNote("G#"), SimpleNote("A#"), SimpleNote("B"), SimpleNote("C#"), SimpleNote("D#"), SimpleNote("E"), SimpleNote("Fx")],
-        "D# Minor": [SimpleNote("D#"), SimpleNote("E#"), SimpleNote("F#"), SimpleNote("G#"), SimpleNote("A#"), SimpleNote("B"), SimpleNote("Cx")],
-        "A# Minor": [SimpleNote("A#"), SimpleNote("B#"), SimpleNote("C#"), SimpleNote("D#"), SimpleNote("E#"), SimpleNote("F#"), SimpleNote("Gx")],
-        "D Minor": [SimpleNote("D"), SimpleNote("E"), SimpleNote("F"), SimpleNote("G"), SimpleNote("A"), SimpleNote("Bb"), SimpleNote("C#")],
-        "G Minor": [SimpleNote("G"), SimpleNote("A"), SimpleNote("Bb"), SimpleNote("C"), SimpleNote("D"), SimpleNote("Eb"), SimpleNote("F#")],
-        "C Minor": [SimpleNote("C"), SimpleNote("D"), SimpleNote("Eb"), SimpleNote("F"), SimpleNote("G"), SimpleNote("Ab"), SimpleNote("B")],
-        "F Minor": [SimpleNote("F"), SimpleNote("G"), SimpleNote("Ab"), SimpleNote("Bb"), SimpleNote("C"), SimpleNote("Db"), SimpleNote("E")],
-        "Bb Minor": [SimpleNote("Bb"), SimpleNote("C"), SimpleNote("Db"), SimpleNote("Eb"), SimpleNote("F"), SimpleNote("Gb"), SimpleNote("A")],
-        "Eb Minor": [SimpleNote("Eb"), SimpleNote("F"), SimpleNote("Gb"), SimpleNote("Ab"), SimpleNote("Bb"), SimpleNote("Cb"), SimpleNote("D")],
-        "Ab Minor": [SimpleNote("Ab"), SimpleNote("Bb"), SimpleNote("Cb"), SimpleNote("Db"), SimpleNote("Eb"), SimpleNote("Fb"), SimpleNote("G")],
-    }
+_C_index = np.where(LINE_OF_FIFTH["note_name"] == "C")[0][0]
+@lru_cache(maxsize=24)
+def get_scales(scale: str):
+    """Returns a mapping of scale names to the notes in the scale. Majors are majors and minors are harmonic minors.
 
-    # Perform some sanity checks
-    for scale, notes in mapping.items():
-        if len(notes) != 7:
-            raise ValueError(f"Invalid scale {scale}")
-
-        difference = [notes[i].get_interval(notes[i+1]) for i in range(6)] + [notes[6].get_interval(notes[0])]
-        if "Major" in scale:
-            assert difference == ["M2", "M2", "m2", "M2", "M2", "M2", "m2"]
-
-        elif "Minor" in scale:
-            assert difference == ["M2", "m2", "M2", "M2", "m2", "A2", "m2"]
-
-        else:
-            raise ValueError(f"Invalid scale {scale}")
-
-    assert set(mapping.keys()) == set(get_supported_scale_names())
-    return mapping
+    If you want natural minors, use MinorN"""
+    note_name, major_minor = scale.split(" ")
+    self_abs_idx = SimpleNote(note_name)._entry["index"] + _C_index
+    if  major_minor == "Major":
+        arr = np.array([0, 2, 4, -1, 1, 3, 5])
+    elif major_minor == "Minor":
+        arr = np.array([0, 2, -3, -1, 1, -4, 5])
+    elif major_minor == "MinorN":
+        arr = np.array([0, 2, -3, -1, 1, -4, -2])
+    else:
+        raise ValueError(f"Invalid scale {scale}")
+    return [SimpleNote(entry) for entry in LINE_OF_FIFTH[self_abs_idx + arr]]

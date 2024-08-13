@@ -6,7 +6,7 @@ from music21.note import Note, Rest, GeneralNote
 from music21.pitch import Pitch
 from ..util import NATURAL
 from ..score import M21Score
-from .scales import ChordLabel, get_scales, get_supported_scale_names, SimpleNote
+from .scales import ChordLabel, SimpleNote, get_scales, is_scale_supported
 
 def chordify_cleanup(s: M21Score) -> M21Score:
     """Remove ties, articulations, expressions, and lyrics from notes in a chordified score.
@@ -90,7 +90,7 @@ def label_obvious_chords(note: GeneralNote, scale_ctx: str) -> ChordLabel:
     - - Chords that do not have a bass note will return a special chord label for now 'NB'
     - - Chords that are not obvious will return a special chord label for now 'UN'
     """
-    if scale_ctx not in get_supported_scale_names():
+    if not is_scale_supported(scale_ctx):
         raise ValueError(f"{scale_ctx} is not a scale.")
 
     if note.isRest:
@@ -113,7 +113,7 @@ def label_obvious_chords(note: GeneralNote, scale_ctx: str) -> ChordLabel:
     if bass_note is None:
         return ChordLabel("NB")
 
-    current_scale = get_scales()[scale_ctx]
+    current_scale = get_scales(scale_ctx)
     if SimpleNote.from_pitch(bass_note) not in current_scale:
         return ChordLabel("NC")
 

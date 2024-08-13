@@ -163,33 +163,30 @@ def label_obvious_chords(note: GeneralNote, scale_ctx: str) -> ChordLabel:
             }[alter]
             accidentals[note_scale_idx].append(symbol)
 
+    possible_labels = {
+        (4, 2): [{2, 4}, {2, 4, 6}],
+        (4, 3): [{3, 4}, {3, 4, 6}],
+        (6, 5): [{5, 6}, {3, 5, 6}],
+        (7,): [{7}, {7, 5}, {7, 3}, {7, 5, 3}],
+        (6, 4): [{4, 6}],
+        (6,): [{3, 6}],
+        (3,): [{3, 5}]
+    }
     step_labels = None
-    if 2 in chord_note_steps and 4 in chord_note_steps:
-        step_labels = [4, 2]
-    elif 3 in chord_note_steps and 4 in chord_note_steps:
-        step_labels = [4, 3]
-    elif 5 in chord_note_steps and 6 in chord_note_steps:
-        step_labels = [6, 5]
-    elif 7 in chord_note_steps:
-        step_labels = [7]
-    elif 4 in chord_note_steps and 6 in chord_note_steps:
-        step_labels = [6, 4]
-    elif 3 in chord_note_steps and 6 in chord_note_steps:
-        step_labels = [6]
-    elif 3 in chord_note_steps and 5 in chord_note_steps:
-        step_labels = [3]
+    for label, steps in possible_labels.items():
+        if chord_note_steps in steps:
+            step_labels = label
 
     if step_labels is None:
         return ChordLabel("UN")
 
     labels = []
-    for x in step_labels:
+    for x in sorted(chord_note_steps, reverse=True):
         assert x in accidentals
-        if not accidentals[x]:
+        if not accidentals[x] and x in step_labels:
             labels.append(str(x))
-            continue
-
-        for symbol in accidentals[x]:
-            labels.append(symbol + str(x))
+        else:
+            for symbol in accidentals[x]:
+                labels.append(symbol + str(x))
 
     return ChordLabel("\n".join(labels))

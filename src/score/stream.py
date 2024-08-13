@@ -312,7 +312,8 @@ def _parse(path: str, expected_type: type[Q]) -> Q:
     # Purely for convenience
     test_cases = {
         "-test.prelude": "resources/scores/Prelude in C Major.mid",
-        "-test.1079": "resources/scores/Musical Offering BWV 1079.mxl"
+        "-test.1079": "resources/scores/Musical Offering BWV 1079.mxl",
+        "-test.fugue": "resources/scores/fugue.mxl"
     }
     if path in test_cases:
         path = test_cases[path]

@@ -243,7 +243,7 @@ class M21Dynamics(M21Wrapper[Dynamic]):
 
     def sanity_check(self):
         super().sanity_check()
-        assert self._data.value in self._VALUES
+        assert self._data.value in self._VALUES, f"Unknown dynamic value: {self._data.value}"
         assert self.quarter_length == 0.0
 
     @property
@@ -257,8 +257,13 @@ class M21Dynamics(M21Wrapper[Dynamic]):
 
     @property
     def name(self):
-        """Returns the length shift of the articulation. 1 means no shift, 1.1 means 10% longer, 0.9 means 10% shorter"""
+        """Returns the name of the dynamic marking"""
         return self._data.longName
+
+    @property
+    def volume(self):
+        """Returns the volume of the dynamic marking"""
+        return self._data.volumeScalar
 
     @staticmethod
     def from_string(s: str):

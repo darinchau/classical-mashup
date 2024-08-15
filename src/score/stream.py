@@ -2,7 +2,7 @@ from typing import TypeVar, Generic, Iterable
 import tempfile
 import music21 as m21
 from music21.articulations import Articulation
-from music21.bar import Barline
+from music21.bar import Barline, Repeat
 from music21.base import Music21Object as M21Object
 from music21.dynamics import Dynamic
 from music21.instrument import Instrument
@@ -29,8 +29,15 @@ class M21StreamWrapper(M21Wrapper[T]):
     """Wrapper for music21 Stream object. Provides methods to iterate over the stream."""
     def sanity_check(self):
         super().sanity_check()
-        for children in self:
-            pass
+        for children in self._data:
+            try:
+                wrap(children) # Performs sanity check recursively
+            except AssertionError:
+                # Remove the children
+                if not self._data.activeSite:
+                    raise
+                self._data.activeSite.remove(children)
+                print(f"Removed {children} from {self._data} due to sanity check failure")
 
     def __iter__(self):
         for children in self._data:
@@ -93,9 +100,11 @@ class M21StreamWrapper(M21Wrapper[T]):
 
     def _normalize_audio_in_place(self):
         """Make all the notes in the stream have the same volume. Returns self"""
-        for n in self._data.recurse().getElementsByClass((Note, Chord)):
-            assert isinstance(n, (Note, Chord))
-            n.volume = 0.5
+        for n in self._data.recurse().getElementsByClass((Note, Chord, Dynamic)):
+            if isinstance(n, (Note, Chord)):
+                n.volume = 0.5
+            elif isinstance(n, Dynamic) and n.activeSite is not None:
+                n.activeSite.remove(n)
         return self
 
     def to_audio(self,
@@ -110,6 +119,10 @@ class M21StreamWrapper(M21Wrapper[T]):
             self.copy()._normalize_audio_in_place().write_to_midi(f1.name)
             convert_midi_to_wav(f1.name, f2.name, soundfont_path, sample_rate, verbose)
             return Audio.load(f2.name)
+
+    def play(self):
+        """A shorthand for self.to_audio().play()"""
+        return self.to_audio().play()
 
     def _remove_all_grace_notes_in_place(self):
         """Remove all grace notes in the stream"""
@@ -136,8 +149,12 @@ class M21Measure(M21StreamWrapper[Measure]):
     def _sanitize_in_place(self):
         super()._sanitize_in_place()
         if self._data.leftBarline is not None:
+            if isinstance(self._data.leftBarline, Repeat):
+                self._data.leftBarline = Barline("regular")
             wrap(self._data.leftBarline)._sanitize_in_place()
         if self._data.rightBarline is not None:
+            if isinstance(self._data.leftBarline, Repeat):
+                self._data.leftBarline = Barline("regular")
             wrap(self._data.rightBarline)._sanitize_in_place()
         return self
 
@@ -196,11 +213,6 @@ class M21Score(M21StreamWrapper[Score]):
     def parse(cls, path: str):
         """Read a music21 Stream object from an XML file or a MIDI file."""
         return cls(_parse(path, Score))
-
-    def play(self):
-        """Play the score inside Jupyter."""
-        assert is_ipython(), "This function can only be called inside Jupyter."
-        play_binary_midi_m21(self.to_binary_midi())
 
     @property
     def parts(self):
@@ -313,7 +325,10 @@ def _parse(path: str, expected_type: type[Q]) -> Q:
     test_cases = {
         "-test.prelude": "resources/scores/Prelude in C Major.mid",
         "-test.1079": "resources/scores/Musical Offering BWV 1079.mxl",
-        "-test.fugue": "resources/scores/fugue.mxl"
+        "-test.fugue": "resources/scores/fugue.mxl",
+        "-test.minuet": "resources/scores/Minuet_in_G_Major_Bach.mxl",
+        "-test.furelise": "resources/scores/Bagatelle_No._25_in_A_minor__Fur_Elise.mid",
+        "-test.bs1": "resources/scores/Beethoven Op 2 No 1.mxl"
     }
     if path in test_cases:
         path = test_cases[path]

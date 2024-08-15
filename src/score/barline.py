@@ -8,15 +8,11 @@ class M21Barline(M21Wrapper[Barline]):
     def sanity_check(self):
         super().sanity_check()
         assert self.quarter_length == 0.0
-        if isinstance(self._data, Repeat):
-            assert self._data.direction in ("start", "end")
 
     def _sanitize_in_place(self):
         super()._sanitize_in_place()
         if self._data.type not in self._ALLOWED_TYPES:
             self._data.type = "regular"
-        if isinstance(self._data, Repeat):
-            self._data.times = 2
         return self
 
     @property

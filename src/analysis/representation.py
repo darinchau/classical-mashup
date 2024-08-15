@@ -10,28 +10,39 @@ class NoteRepresentation:
 
     Implements the partitura representation.
 
+    # Note time information
     onset_beat: float: The onset of the note in beats
     duration_beat: float: The duration of the note in beats
-    onset_quarter: float: The onset of the note in quarters
-    duration_quarter: float: The duration of the note in quarters
+    onset_quarter: float: The onset of the note in quarter notes
+    duration_quarter: float: The duration of the note in quarter notes
     onset_div: int: The onset of the note in divisions
     duration_div: int: The duration of the note in divisions
-    pitch: int: The pitch of the note
+
+    # Note information
+    pitch: int: The pitch of the note (C4 = 60)
     voice: int: The voice of the note
     id: str: The id of the note
+
     step: str: The step of the note
     alter: int: The alteration of the note
     octave: int: The octave of the note
+
+    # Grace Notes
     is_grace: int: Whether the note is a grace note
     grace_type: str: The type of grace note
+
+    # Key Signature
     ks_fifths: int: Number of sharps or flats in the key signature
     ks_mode: int: The key signature mode
-    ts_beats: int: The time signature beats
-    ts_beat_type: int: The time signature beat type
-    ts_mus_beats: int: The time signature musical beats
+
+    # Time Signature
+    ts_beats: int: The numerator of the time signature
+    ts_beat_type: int: The denominator of the time signature
+
+    # Metrical information
     is_downbeat: int: Whether the note is a downbeat
-    rel_onset_div: int: The relative onset of the note in divisions
-    tot_measure_div: int: The total measure divisions
+    rel_onset_div: int: The relative onset of the note in divisions wrt the first beat of the current measure it is in
+    tot_measure_div: int: The total number of divisions in the current measure
     """
     onset_beat: float
     duration_beat: float
@@ -51,8 +62,7 @@ class NoteRepresentation:
     ks_mode: int
     ts_beats: int
     ts_beat_type: int
-    ts_mus_beats: int
-    is_downbeat: int
+    is_downbeat: bool
     rel_onset_div: int
     tot_measure_div: int
 
@@ -81,8 +91,7 @@ class NoteRepresentation:
             ks_mode = int(array["ks_mode"]),
             ts_beats = int(array["ts_beats"]),
             ts_beat_type = int(array["ts_beat_type"]),
-            ts_mus_beats = int(array["ts_mus_beats"]),
-            is_downbeat = int(array["is_downbeat"]),
+            is_downbeat = bool(array["is_downbeat"]),
             rel_onset_div = int(array["rel_onset_div"]),
             tot_measure_div = int(array["tot_measure_div"])
         )
@@ -96,46 +105,3 @@ class NoteRepresentation:
     def offset_quarter(self):
         """The offset of the note in quarters"""
         return self.onset_quarter + self.duration_quarter
-
-@dataclass
-class NoteGraphNeighbours:
-    """A data structure to represent the neighbours of a note in a graph
-    concurrent: list[int]: When two notes are fired together
-    consecutive: list[int]: When two notes follow each other
-    overlap: list[int]: When two notes overlap i.e. one note fires before the other ends
-    """
-    concurrent: list[int] # When two notes are fired together
-    consecutive: list[int] # When two notes follow each other
-    overlap: list[int]  # When two notes overlap i.e. one note fires before the other ends
-
-def make_score_graph(notes: list[NoteRepresentation], *, tol = 1e-4) -> list[NoteGraphNeighbours]:
-    notes_by_onset = sorted([[n.onset_beat, i] for i, n in enumerate(notes)])
-    neighbours = [NoteGraphNeighbours([], [], []) for _ in range(len(notes))]
-
-    notes_by_onset_index = np.array([i for _, i in notes_by_onset])
-    notes_by_onset_note = np.array([onset for onset, _ in notes_by_onset])
-
-    for i, n in enumerate(notes):
-        onset = n.onset_beat
-        offset = n.offset_beat
-        note_at_onset = notes_by_onset_index[np.searchsorted(notes_by_onset_note, onset, side='right') - 1]
-        for j in range(note_at_onset, len(notes)):
-            if j == i:
-                continue
-            if notes[j].onset_beat > offset + tol:
-                break
-            if abs(notes[j].onset_beat - offset) < tol:
-                neighbours[i].consecutive.append(j)
-            elif abs(notes[j].onset_beat - onset) < tol:
-                neighbours[i].concurrent.append(j)
-            elif notes[j].onset_beat < offset:
-                neighbours[i].overlap.append(j)
-
-        for j in range(note_at_onset - 1, -1, -1):
-            if j == i:
-                continue
-            if notes[j].onset_beat < onset - tol:
-                break
-            if abs(notes[j].onset_beat - onset) < tol:
-                neighbours[i].consecutive.append(j)
-    return neighbours

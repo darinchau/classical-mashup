@@ -105,3 +105,7 @@ class NoteRepresentation:
     def offset_quarter(self):
         """The offset of the note in quarters"""
         return self.onset_quarter + self.duration_quarter
+
+    def to_simple_note(self):
+        from .scales import SimpleNote
+        return SimpleNote.from_step_alter(self.step, self.alter)

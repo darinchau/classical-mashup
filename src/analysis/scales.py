@@ -6,6 +6,7 @@ import re
 import music21 as m21
 import numpy as np
 import typing
+from .representation import NoteRepresentation
 
 class ChordLabel(m21.note.Lyric):
     """A class that represents a chord label. Subclasses music21.note.Lyric so it can be added onto a note."""
@@ -143,6 +144,11 @@ class SimpleNote:
     def from_note(cls, note: m21.note.Note) -> SimpleNote:
         """Creates a SimpleNote from a music21 note."""
         return cls.from_pitch(note.pitch)
+
+    @classmethod
+    def from_step_alter(cls, step: str, alter: int) -> SimpleNote:
+        """Creates a SimpleNote from a step and an alter."""
+        return cls(f"{step}{['bb', 'b', '', '#', 'x'][alter + 2]}")
 
     def __eq__(self, other: SimpleNote):
         return self._entry["index"] == other._entry["index"]

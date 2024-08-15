@@ -1,74 +1,32 @@
-import copy
-import typing
-import music21 as m21
-from music21.stream.base import Stream, Score, Measure
-from music21.note import Note, Rest, GeneralNote
-from music21.pitch import Pitch
-from ..util import NATURAL
+import numpy as np
 from ..score import M21Score
-from .scales import ChordLabel, SimpleNote, get_scales, is_scale_supported
+from partitura.musicanalysis.pitch_spelling import ps13s1 as ps
+import numpy as np
 
-def chordify_cleanup(s: M21Score) -> M21Score:
-    """Remove ties, articulations, expressions, and lyrics from notes in a chordified score.
+def predict_spelling(s: M21Score):
+    note_reps = s.get_note_representation_list()
 
-    In the first part, the bass notes are put onto octave 4, and the other notes are put onto octave 5.
-    In the second part, the chord notes are put onto octave 5, and the other notes are put onto octave 5.
-    In the third part, the bass notes are put onto octave 3."""
-    part = s.sanitize()._data.chordify()
-    part = part.stripTies()
+    arr = np.array([
+        (note.onset_beat, note.duration_beat, note.onset_quarter, note.duration_quarter,
+        note.onset_div, note.duration_div, note.pitch, note.voice, note.id,
+        note.step, note.alter, note.octave,
+        "", 0, 0)
+    for note in note_reps], dtype = (
+        [('onset_beat', float), ('duration_beat', float), ('onset_quarter', float), ('duration_quarter', float),
+        ('onset_div', float), ('duration_div', float), ('pitch', int), ('voice', int), ('id', str),
+        ("real_spelling_step", "U1"), ("real_spelling_alter", int), ("real_spelling_octave", int),
+        ("pred_spelling_step", "U1"), ("pred_spelling_alter", int), ("pred_spelling_octave", int)]
+    ))
 
-    all_note_part = part.cloneEmpty("chordify_cleanup")
-    chord_part = part.cloneEmpty("chordify_cleanup")
-    bass_part = part.cloneEmpty("chordify_cleanup")
+    step, alter, octave = ps(arr)
 
-    for measure in part.getElementsByClass(Measure):
-        all_note_measure = measure.cloneEmpty("chordify_cleanup")
-        bass_measure = measure.cloneEmpty("chordify_cleanup")
-        chord_measure = measure.cloneEmpty("chordify_cleanup")
+    arr["pred_spelling_step"] = step
+    arr["pred_spelling_alter"] = alter
+    arr["pred_spelling_octave"] = octave
 
-        all_note_part.insert(measure.offset, all_note_measure)
-        bass_part.insert(measure.offset, bass_measure)
-        chord_part.insert(measure.offset, chord_measure)
+    unequal_idx = np.bitwise_or(arr["pred_spelling_step"] != arr["real_spelling_step"], arr["pred_spelling_alter"] != arr["real_spelling_alter"], arr["pred_spelling_octave"] != arr["real_spelling_octave"])
+    accuracy = 1 - np.sum(unequal_idx) / len(unequal_idx)
 
-        for el in measure.notesAndRests:
-            new_note = copy.deepcopy(el)
-            all_note_measure.insert(el.offset, new_note)
-
-            # Cleanup new note
-            if not new_note.isRest:
-                new_note.tie = None
-                new_note.expressions = []
-                new_note.articulations = []
-                new_note.lyrics = []
-
-                if len(new_note.pitches) == 1:
-                    new_note.pitches[0].octave = 5
-                else:
-                    bass = min(new_note.pitches, key=lambda x: (x.ps, x.diatonicNoteNum))
-                    bass.octave = 4
-                    for p in new_note.pitches:
-                        if p is not bass:
-                            p.octave = 5
-
-            # Create bass note from new note
-            bass_note = copy.deepcopy(new_note)
-            bass_measure.insert(el.offset, bass_note)
-            if not new_note.isRest:
-                bass_note.pitches = (bass_note.pitches[0],)
-                bass_note.pitches[0].octave = 3
-
-            # Create chord note from new note
-            chord_note = copy.deepcopy(new_note)
-            chord_measure.insert(el.offset, chord_note)
-            if not new_note.isRest:
-                chord_note.pitches[0].octave = 5
-                new_pitches = []
-                for p in sorted(chord_note.pitches, key=lambda x: (x.ps, x.diatonicNoteNum)):
-                    if new_pitches and p.ps == new_pitches[-1].ps:
-                        continue
-                    new_pitches.append(p)
-
-                chord_note.pitches = tuple(new_pitches)
-
-    bass_part.insert(0, m21.clef.BassClef())
-    return M21Score(Score([all_note_part, chord_part, bass_part]))
+    # for note in arr[unequal_idx]:
+    #     print(f"Onset: {note["onset_quarter"]} (Bar: {note["onset_quarter"] // 4 + 1}) {note["real_spelling_step"]}{note["real_spelling_alter"]} ({note["real_spelling_octave"]}) -> {note["pred_spelling_step"]}{note["pred_spelling_alter"]} ({note["pred_spelling_octave"]})")
+    return arr, accuracy

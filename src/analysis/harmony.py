@@ -210,7 +210,6 @@ def predict_spelling(sorted_note_reps: list[NoteRepresentation], context_window:
     # Shape (n,). arr[i] is the morphetic pitch of the ith note i.e. the morphetic pitch implied by the morph and the pitch number
     morphetic_pitch = compute_morphetic_pitch(chromatic_pitch, morph_array)
 
-
     step, alter, octave = chromatic_pitch_to_pitch_name(chromatic_pitch, morphetic_pitch.reshape(-1,))
 
     notes = [PredictedNote(

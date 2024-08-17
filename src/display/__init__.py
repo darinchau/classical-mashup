@@ -1,7 +1,7 @@
 # The module responsible for displaying scores and stuff
-from ..score import M21Score, M21Object
+from ..score.music21 import M21Score, M21Object
 from ..analysis.representation import NoteRepresentation
-from ..analysis.voices import get_offset_to_site
+from ..score.music21 import get_offset_to_score
 from ..util import is_ipython
 from music21 import expressions, style, stream
 import music21 as m21
@@ -31,20 +31,20 @@ class TextAnnotation(m21.note.Lyric):
         self._annotations = []
         self.text = ""
 
-def add_border_and_annotation_to_note(s: M21Score, note: NoteRepresentation, annotation: str):
+def add_border_and_annotation_to_note(s: M21Score, onset_quarter: float, pitch: int, annotation: str):
     """Add a border and an annotation to a note in a score."""
     # TODO find better ways to do this? Also any way to
     # - change the color of the border
     # - change the color of the annotation
     # - make border thicker
     # - add spanner type annotations
-    def get_note_or_chord_by_representation(rep: NoteRepresentation, s: M21Score):
+    def get_note_or_chord_by_representation(onset_quarter: float, pitch: int, s: M21Score):
         for note in s._data.recurse().notes:
-            if get_offset_to_site(note, s) == rep.onset_quarter and rep.pitch in [n.ps for n in note.pitches]:
+            if get_offset_to_score(note, s) == onset_quarter and pitch in [n.ps for n in note.pitches]:
                 return note
         return None
 
-    note_ = get_note_or_chord_by_representation(note, s)
+    note_ = get_note_or_chord_by_representation(onset_quarter, pitch, s)
     if note_ is None:
         return False
 

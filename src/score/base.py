@@ -1,11 +1,12 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import Self, TypeVar
-import enum
+from typing import Self, TypeVar, TYPE_CHECKING
 
-T = TypeVar('T', bound=ScoreRepresentation)
+if TYPE_CHECKING:
+    from .standard import StandardScore
+
 class ScoreRepresentation(ABC):
-    """Defines an abstract class for score representation."""
+    """Defines an abstract class for score representation. All score representations must conform to this class and convert to and from standard representation."""
     @abstractmethod
     def to_standard(self) -> StandardScore:
         """Converts the score to a standard score representation."""
@@ -25,10 +26,4 @@ class ScoreRepresentation(ABC):
         if not isinstance(other, ScoreRepresentation):
             return NotImplemented
         return self.to_standard() == other.to_standard()
-
-
-class StandardScore(ScoreRepresentation):
-    """Defines a standard score representation to which all scores must conform.
-    Internally, the standard score is a list of tuples, where each tuple contains
-    information about how to reconstruct a score
-    """
+T = TypeVar('T', bound=ScoreRepresentation)

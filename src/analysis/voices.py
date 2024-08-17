@@ -1,13 +1,10 @@
 from src.score import M21Score
-from src.score.stream import _parse
 import music21 as m21
 from music21.stream.base import PartStaff, Part, Measure, Score
-from src.score import M21Object, M21Part
 from music21.note import GeneralNote
-from src.score import M21StreamWrapper, M21Measure
 from music21.common.types import OffsetQL
 from fractions import Fraction
-from src.score.util import float_to_fraction_time
+from ..score.music21 import _float_to_fraction_time as float_to_fraction_time, get_offset_to_score, M21Object
 
 class MergeViolation(Exception):
     """Reports a violation in the merging of two measures"""
@@ -112,16 +109,6 @@ def get_part_offset_event(new_score: M21Score):
         part_offset_events[event].sort(key=lambda x: x[0])
 
     return part_offset_events
-
-def get_offset_to_site(obj: GeneralNote, site: M21StreamWrapper) -> OffsetQL | None:
-    x: M21Object = obj
-    offset = Fraction()
-    while x.activeSite is not None:
-        offset += x.offset
-        x = x.activeSite
-        if x is site._data:
-            return offset
-    return None
 
 def get_note_on_or_before_offset(target_offset: OffsetQL, measure: M21Measure):
     notes = measure._data.recurse().getElementsByClass([

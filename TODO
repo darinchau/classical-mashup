@@ -1,7 +1,1 @@
-Maybe future me can think about how to hook the code to a vst
-Midi to audio collection, each track its own separate thing?
-Metronome marks
-Support for m21.layout.StaffGroup (which makes the barlines and stuff nicer)
-Fix beaming of expanded voice
-Check the notes in the measure indeed add up to the measure length and no overlapped notes
-Support repeats
+Reimplement voices from last commit

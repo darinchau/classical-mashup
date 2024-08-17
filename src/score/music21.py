@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from src.score.base import StandardScore
 from ..audio import Audio
 from ..util import is_ipython
 from .base import ScoreRepresentation
+from .standard import StandardScore
 from fractions import Fraction
 from music21 import common
 from music21.articulations import Accent, Staccato, Tenuto
@@ -30,6 +30,22 @@ import music21 as m21
 import subprocess
 import tempfile
 import warnings
+
+_MUSIC21_SETUP = False
+
+def setup():
+    from music21 import environment
+    global _MUSIC21_SETUP
+    if _MUSIC21_SETUP:
+        return
+
+    us = environment.UserSettings()
+    us['musescoreDirectPNGPath'] = '/usr/bin/mscore'
+    us['directoryScratch'] = '/tmp'
+
+    _MUSIC21_SETUP = True
+
+setup()
 
 class M21Score(ScoreRepresentation):
     """A score is a special wrapper for a music21 Score object. A score must contain parts which contain measures.
@@ -300,7 +316,7 @@ def _parse(path: str, expected_type: type[Q]) -> Q:
 
 _ALLOWED_ARTICULATION = (Accent, Staccato, Tenuto)
 _ALLOWED_EXPRESSION = (Trill, Turn, Mordent, InvertedMordent, Fermata, TextExpression)
-_ALLOWED_BARLINE_TYPES = ("regular", "double", "final", "repeat", "heavy-light")
+_ALLOWED_BARLINE_TYPES = ("regular", "final")
 _ALLOWED_DYNAMICS = ("ppp", "pp", "p", "mp", "mf", "f", "ff", "fff", "sf", "fp")
 
 def check_note_or_chord(obj: Note | Chord):
@@ -538,3 +554,16 @@ def load_score_from_corpus(corpus_name: str, movement_number: int | None = None,
 
     assert isinstance(corpus, Part), f"Unexpected type: {type(corpus)}"
     return M21Score(Score([corpus]))
+
+def get_offset_to_score(obj: GeneralNote, site: M21Score) -> OffsetQL | None:
+    return get_offset_to_site(obj, site._data)
+
+def get_offset_to_site(obj: GeneralNote, site: Stream) -> OffsetQL | None:
+    x: M21Object = obj
+    offset = Fraction()
+    while x.activeSite is not None:
+        offset += x.offset
+        x = x.activeSite
+        if x is site:
+            return offset
+    return None

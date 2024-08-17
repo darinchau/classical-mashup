@@ -1,6 +1,6 @@
+from __future__ import annotations
 from ..audio import Audio
 from ..util import is_ipython
-from .base import M21Wrapper, M21Object, IDType
 from fractions import Fraction
 from music21 import common
 from music21.articulations import Accent, Staccato, Tenuto
@@ -26,15 +26,24 @@ import copy
 import music21 as m21
 import subprocess
 import tempfile
+import warnings
 
 
-class M21Score(M21Wrapper[Score]):
+class M21Score:
     """A score is a special wrapper for a music21 Score object. A score must contain parts which contain measures.
     This wrapper provides methods to access the parts and measures of the score.
 
     Score parts can additionally contain instruments since this seems to be a common use case in music21.
 
     Maybe we will support those 1-2 repeats in the future, but for now assume no repeats"""
+    def __init__(self, obj: Score, *, skip_check: bool = False):
+        self._data = obj
+        if not skip_check:
+            self.sanity_check()
+
+    def __eq__(self, value: M21Score) -> bool:
+        return self._data == value._data
+
     def sanity_check(self):
         # This checks the score as a generic stream, which indirectly asserts that a score cannot contain other scores
         check_stream(self._data)
@@ -64,12 +73,54 @@ class M21Score(M21Wrapper[Score]):
         self._check_measure_numbers()
         return self
 
+    def sanitize(self):
+        """Return a sanitized version of the object."""
+        return self.copy()._sanitize_in_place()
+
     def __iter__(self):
         return self._data.iter()
 
     @property
+    def duration(self) -> Duration:
+        """Return a view of the duration object of the underlying m21 object."""
+        duration = self._data.duration
+        return duration
+
+    @property
+    def quarter_length(self) -> OffsetQL:
+        """Return the duration of the object in quarter length."""
+        return self.duration.quarterLength
+
+    def copy(self):
+        """Return a deep copy of the object."""
+        return copy.deepcopy(self)
+
+    def show(self, fmt = None, invert = True):
+        """Calls the show method of the music21 object. Refer to the music21 documentation for more information.
+
+        If invert is True and we are currently in IPython using the default fmt=None, then the output color will be inverted. This is useful for having a dark mode IDE."""
+        if is_ipython() and fmt is None:
+            from ..display import display_score
+            display_score(self._data, invert_color=invert, skip_display=False)
+            return
+        return self._data.show(fmt)
+
+    def __repr__(self):
+        return f"<|{self._data.__repr__()}|>"
+
+    @property
+    def id(self) -> int | str:
+        """Returns a unique ID object representing this object"""
+        return self._data.id
+
+    @property
+    def offset(self) -> OffsetQL:
+        """Returns the offset of the note/chord with respect to its active site"""
+        return self._data.offset
+
+    @property
     def notes(self):
-        """Returns an iterator of notes in the stream"""
+        """Returns an iterator of a view of the notes in the stream"""
         ls = [n for n in self._data.recurse().notes if isinstance(n, Note)]
         ids = set()
         ls: list[Note] = []
@@ -81,7 +132,7 @@ class M21Score(M21Wrapper[Score]):
 
     @property
     def notes_and_rests(self):
-        """Returns an iterator of notes and rests in the stream"""
+        """Returns an iterator of view of notes and rests in the stream"""
         return [n for n in self._data.recurse().notesAndRests if isinstance(n, (Note, Chord, Rest))]
 
     def write_to_midi(self, path: str):
@@ -92,15 +143,6 @@ class M21Score(M21Wrapper[Score]):
             file.write()
         finally:
             file.close()
-
-    def to_binary_midi(self):
-        """Convert a music21 Stream object to a binary MIDI file."""
-        with tempfile.NamedTemporaryFile(suffix='.mid') as f:
-            self.write_to_midi(f.name)
-            with open(f.name, 'rb') as fp:
-                binary_midi_data = fp.read()
-
-        return binary_midi_data
 
     def _normalize_audio_in_place(self):
         """Make all the notes in the stream have the same volume. Returns self"""
@@ -486,7 +528,6 @@ def _float_to_fraction_time(f: OffsetQL, *, limit_denom: int = m21.defaults.limi
 
 def load_score_from_corpus(corpus_name: str, movement_number: int | None = None, **kwargs) -> M21Score:
     """Loads a piece from the music21 corpus"""
-    from .stream import M21Score
     corpus = m21.corpus.parse(corpus_name, movement_number, **kwargs)
 
     if isinstance(corpus, Score):

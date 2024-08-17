@@ -226,3 +226,7 @@ def predict_spelling(sorted_note_reps: list[NoteRepresentation], context_window:
     ) for note, s, a, o in zip(sorted_note_reps, step, alter, octave)]
 
     return notes
+
+# Some utility
+def get_accuracy(notes: list[PredictedNote]):
+    return sum(n.pred_alter == n.real_alter and n.pred_octave == n.real_octave and n.pred_step == n.real_step for n in notes) / len(notes)

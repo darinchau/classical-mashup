@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import TypeVar, Generic
+from typing import Any, TypeVar, Generic
 T = TypeVar('T')
 
 def height(x: AVLTree.Node | None):
@@ -7,6 +7,7 @@ def height(x: AVLTree.Node | None):
 
 def update_height(x: AVLTree.Node):
     x.height = 1 + max(height(x.left), height(x.right))
+    x.num_element = 1 + (x.left.num_element if x.left is not None else 0) + (x.right.num_element if x.right is not None else 0)
 
 def weight(x: AVLTree.Node | None):
     return height(x.left) - height(x.right) if x is not None else 0
@@ -123,12 +124,22 @@ class AVLTree(Generic[T]):
             self.left: AVLTree.Node | None = None
             self.right: AVLTree.Node | None = None
             self.height = 1
+            self.num_element = 1
 
         def min_key(self):
             x = self
             while x.left is not None:
                 x = x.left
             return x.key
+
+        def flatten(self) -> list[T]:
+            elements = []
+            if self.left is not None:
+                elements += self.left.flatten()
+            elements.append(self.key)
+            if self.right is not None:
+                elements += self.right.flatten()
+            return elements
 
     def __init__(self):
         self.key = None
@@ -140,12 +151,9 @@ class AVLTree(Generic[T]):
         self.key = delete(self.key, key)
 
     def flatten(self) -> list[T]:
-        def collect_elements(node: AVLTree.Node | None):
-            if node is None:
-                return []
-            return collect_elements(node.left) + [node.key] + collect_elements(node.right)
-        elements = collect_elements(self.key)
-        return elements
+        if self.key is None:
+            return []
+        return self.key.flatten()
 
     def __contains__(self, x: T):
         def contains(node: AVLTree.Node | None):
@@ -157,3 +165,25 @@ class AVLTree(Generic[T]):
                 return contains(node.right)
             return True
         return contains(self.key)
+
+    def empty(self):
+        return self.key is None
+
+    def __len__(self):
+        return self.key.num_element if self.key is not None else 0
+
+    def __getitem__(self, idx: int) -> T:
+        def num_element(node: AVLTree.Node | None):
+            return node.num_element if node is not None else 0
+        def getitem(node: AVLTree.Node | None, idx: int):
+            if node is None:
+                raise IndexError
+            left_elem = num_element(node.left)
+            if idx < left_elem:
+                return getitem(node.left, idx)
+            if idx == left_elem:
+                return node.key
+            return getitem(node.right, idx - left_elem - 1)
+        if idx < 0 or idx >= len(self):
+            raise IndexError
+        return getitem(self.key, idx)

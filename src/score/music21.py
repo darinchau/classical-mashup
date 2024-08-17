@@ -1,6 +1,9 @@
 from __future__ import annotations
+
+from src.score.base import StandardScore
 from ..audio import Audio
 from ..util import is_ipython
+from .base import ScoreRepresentation
 from fractions import Fraction
 from music21 import common
 from music21.articulations import Accent, Staccato, Tenuto
@@ -28,8 +31,7 @@ import subprocess
 import tempfile
 import warnings
 
-
-class M21Score:
+class M21Score(ScoreRepresentation):
     """A score is a special wrapper for a music21 Score object. A score must contain parts which contain measures.
     This wrapper provides methods to access the parts and measures of the score.
 
@@ -79,6 +81,13 @@ class M21Score:
 
     def __iter__(self):
         return self._data.iter()
+
+    def to_standard(self) -> StandardScore:
+        raise NotImplementedError
+
+    @classmethod
+    def from_standard(cls, score: StandardScore) -> M21Score:
+        raise NotImplementedError
 
     @property
     def duration(self) -> Duration:
@@ -135,36 +144,9 @@ class M21Score:
         """Returns an iterator of view of notes and rests in the stream"""
         return [n for n in self._data.recurse().notesAndRests if isinstance(n, (Note, Chord, Rest))]
 
-    def write_to_midi(self, path: str):
-        """Write a music21 Stream object to a MIDI file."""
-        file = streamToMidiFile(self._data, addStartDelay=True)
-        file.open(path, "wb")
-        try:
-            file.write()
-        finally:
-            file.close()
-
-    def _normalize_audio_in_place(self):
-        """Make all the notes in the stream have the same volume. Returns self"""
-        for n in self._data.recurse().getElementsByClass((Note, Chord, Dynamic)):
-            if isinstance(n, (Note, Chord)):
-                n.volume = 0.5
-            elif isinstance(n, Dynamic) and n.activeSite is not None:
-                n.activeSite.remove(n)
-        return self
-
-    def to_audio(self,
-                 sample_rate: int = 44100,
-                 soundfont_path: str = "~/.fluidsynth/default_sound_font.sf2",
-                 verbose: bool = False):
-        """Convert a music21 Stream object to our Audio object."""
-        with (
-            tempfile.NamedTemporaryFile(suffix=".mid") as f1,
-            tempfile.NamedTemporaryFile(suffix=".wav") as f2
-        ):
-            self.copy()._normalize_audio_in_place().write_to_midi(f1.name)
-            _convert_midi_to_wav(f1.name, f2.name, soundfont_path, sample_rate, verbose)
-            return Audio.load(f2.name)
+    def to_audio(self, sample_rate: int = 44100, soundfont_path: str = "~/.fluidsynth/default_sound_font.sf2", verbose: bool = False):
+        """Convert the score to an audio object."""
+        return stream_to_audio(self._data, sample_rate, soundfont_path, verbose)
 
     def play(self):
         """A shorthand for self.to_audio().play()"""
@@ -525,6 +507,27 @@ def _float_to_fraction_time(f: OffsetQL, *, limit_denom: int = m21.defaults.limi
             remainder *= -1
 
     return int(quotient) + remainder
+
+def stream_to_audio(stream: Stream, sample_rate: int = 44100, soundfont_path: str = "~/.fluidsynth/default_sound_font.sf2", verbose: bool = False):
+    """Convert a music21 Stream object to our Audio object."""
+    s2 = copy.deepcopy(stream)
+    for n in s2.recurse().getElementsByClass((Note, Chord, Dynamic)):
+        if isinstance(n, (Note, Chord)):
+            n.volume = 0.5
+        elif isinstance(n, Dynamic) and n.activeSite is not None:
+            n.activeSite.remove(n)
+    with (
+        tempfile.NamedTemporaryFile(suffix=".mid") as f1,
+        tempfile.NamedTemporaryFile(suffix=".wav") as f2
+    ):
+        file = streamToMidiFile(s2, addStartDelay=True)
+        file.open(f1.name, "wb")
+        try:
+            file.write()
+        finally:
+            file.close()
+        _convert_midi_to_wav(f1.name, f2.name, soundfont_path, sample_rate, verbose)
+        return Audio.load(f2.name)
 
 def load_score_from_corpus(corpus_name: str, movement_number: int | None = None, **kwargs) -> M21Score:
     """Loads a piece from the music21 corpus"""

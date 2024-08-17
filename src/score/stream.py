@@ -312,6 +312,25 @@ class M21Score(M21StreamWrapper[Score]):
         reps = [NoteRepresentation.from_array(x) for x in extended_score_note_array]
         return sorted(reps, key = lambda x: (x.onset_beat, x.pitch))
 
+    @classmethod
+    def from_tiny_notation(cls, notation: str):
+        """Create a score from a tiny notation string"""
+        tnc = m21.tinyNotation.Converter()
+
+        class ChordState(m21.tinyNotation.State):
+            def affectTokenAfterParse(self, n):
+                super(ChordState, self).affectTokenAfterParse(n)
+                return None # do not append Note object
+
+            def end(self):
+                ch = Chord(self.affectedTokens)
+                ch.duration = self.affectedTokens[0].duration
+                return ch
+
+        tnc.bracketStateMapping['chord'] = ChordState
+        tnc.load(f"tinyNotation: {notation}")
+        return M21Score(Score(tnc.parse().stream))
+
 Q = TypeVar("Q", bound=Stream)
 def _parse(path: str, expected_type: type[Q]) -> Q:
     """Read a music21 Stream object from an XML file or a MIDI file."""

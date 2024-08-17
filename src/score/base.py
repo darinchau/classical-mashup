@@ -12,7 +12,7 @@ from music21.common.types import OffsetQL, StepName
 from music21.interval import Interval
 from music21.stream.base import Part, Score
 from typing import Generic, TypeVar
-from .util import wrap, display_score
+from .util import wrap
 import warnings
 from ..util import is_ipython
 
@@ -93,7 +93,9 @@ class M21Wrapper(Generic[T]):
 
         If invert is True and we are currently in IPython using the default fmt=None, then the output color will be inverted. This is useful for having a dark mode IDE."""
         if is_ipython() and fmt is None:
-            return display_score(self._data, invert_color=invert, skip_display=False)
+            from ..display import display_score
+            display_score(self._data, invert_color=invert, skip_display=False)
+            return
         return self._data.show(fmt)
 
     def __repr__(self):

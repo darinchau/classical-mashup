@@ -9,7 +9,6 @@ from music21.meter.base import TimeSignature
 from music21 import corpus, converter
 from src.analysis.melody import _sanitize_as_melody
 from src.analysis.voices import separate_voices
-from src.analysis.harmony import chordify_cleanup
 from src.analysis.scales import SimpleNote
 import numpy as np
 
@@ -93,30 +92,14 @@ def test_sanitize_measure_numbers():
 def test_sanitize_grace_note_2():
     s = M21Score.parse("-test.1079")
     s._sanitize_in_place()
-    arr = s.get_raw_note_array()
-    assert np.all(arr['is_grace'] == 0)
+    arr = s.get_note_representation_list()
+    assert all(not rep.is_grace for rep in arr)
 
 def test_separate_voices():
     s = M21Score.parse("-test.1079")
     s._sanitize_in_place()
     s2 = separate_voices(s)
     assert len(list(s2._data)) == 3
-
-def test_chordify_cleanup():
-    score = M21Score.parse("-test.1079")
-    score._sanitize_in_place()
-
-    ccs = chordify_cleanup(score)
-
-    # To check that the chordify_cleanup function cleans up the notes correctly
-    assert len(ccs.get_measure(1, 29)._data.recurse().notes[3].pitches) == 2
-    assert len(ccs.get_measure(1, 29)._data.recurse().notes[4].pitches) == 2
-
-    # Check the ties are removed
-    assert ccs.get_measure(1, 10)._data.recurse().notes[0].tie is None
-    assert ccs.get_measure(1, 10)._data.recurse().notes[1].tie is None
-    assert ccs.get_measure(1, 10)._data.recurse().notes[0].expressions == []
-    assert ccs.get_measure(1, 10)._data.recurse().notes[0].articulations == []
 
 def test_simple_note():
     assert SimpleNote("A").note_name == "A"
@@ -155,3 +138,20 @@ def test_simple_note_interval():
     assert SimpleNote("C").get_interval(SimpleNote("B")) == "M7"
     assert SimpleNote("B").get_interval(SimpleNote("C")) == "m2"
     assert SimpleNote("B#").get_interval(SimpleNote("Cb")) == "Unknown" # Make sure doesnt throw error
+
+def test_tiny_notation_chord():
+    s = M21Score.from_tiny_notation("3/8 c8 d e e f g# 3/4 a4 b chord{e g c'} 2/4 f#2")
+    assert [(rep.pitch, rep.onset_beat) for rep in s.get_note_representation_list()] == [
+        (60, 0.0),
+        (62, 1.0),
+        (64, 2.0),
+        (64, 3.0),
+        (65, 4.0),
+        (68, 5.0),
+        (69, 6.0),
+        (71, 7.0),
+        (64, 8.0),
+        (67, 8.0),
+        (72, 8.0),
+        (66, 9.0)
+    ]

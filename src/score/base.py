@@ -6,16 +6,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 import music21 as m21
 import copy
-from music21.midi.translate import streamToMidiFile
-from src.util import is_ipython
 from music21.base import Music21Object as M21Object
 from music21.duration import Duration
 from music21.common.types import OffsetQL, StepName
 from music21.interval import Interval
 from music21.stream.base import Part, Score
 from typing import Generic, TypeVar
-from .util import wrap
+from .util import wrap, display_score
 import warnings
+from ..util import is_ipython
 
 T = TypeVar("T", bound=M21Object, covariant=True)
 T2 = TypeVar("T2", bound=M21Object)
@@ -89,8 +88,12 @@ class M21Wrapper(Generic[T]):
         """Return a deep copy of the object."""
         return copy.deepcopy(self)
 
-    def show(self, fmt = None):
-        """Calls the show method of the music21 Stream object. Refer to the music21 documentation for more information."""
+    def show(self, fmt = None, invert = True):
+        """Calls the show method of the music21 object. Refer to the music21 documentation for more information.
+
+        If invert is True and we are currently in IPython using the default fmt=None, then the output color will be inverted. This is useful for having a dark mode IDE."""
+        if is_ipython() and fmt is None:
+            return display_score(self._data, invert_color=invert, skip_display=False)
         return self._data.show(fmt)
 
     def __repr__(self):

@@ -3,9 +3,8 @@ from fractions import Fraction
 from dataclasses import dataclass
 import music21 as m21
 import copy
-from music21.midi.translate import streamToMidiFile
 import tempfile
-from src.util import is_ipython
+from ..util import is_ipython
 import base64
 from music21 import common
 from music21.articulations import Tenuto, Accent, Staccato
@@ -23,6 +22,14 @@ from music21.spanner import Slur
 import subprocess
 from ..audio import Audio
 import warnings
+from music21.ipython21 import converters as ip21_converters
+from music21.converter.subConverters import ConverterMusicXML
+from music21 import defaults
+from music21.converter import museScore
+import pathlib
+import matplotlib.image as mpimg
+import numpy as np
+import tempfile
 from typing import Generic, TypeVar, Iterable, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -158,3 +165,48 @@ def load_part_from_corpus(corpus_name: str, movement_number: int | None = None, 
 
     assert isinstance(corpus, Part), f"Unexpected type: {type(corpus)}"
     return M21Part(corpus)
+
+def display_score(obj: M21Object, invert_color: bool = True, skip_display: bool = False):
+    """Displays the score. Returns a dictionary where keys are the page numbers and values are the images of the page in np arrays"""
+    savedDefaultTitle = defaults.title
+    savedDefaultAuthor = defaults.author
+    defaults.title = ''
+    defaults.author = ''
+
+    if isinstance(obj, Opus):
+        raise NotImplementedError("Perform a recursive call to show here when we support Opuses. Ref: music21.ipython21.converters.showImageThroughMuseScore")
+
+    fp = ConverterMusicXML().write(
+        obj,
+        fmt="musicxml",
+        subformats=["png"],
+        trimEdges=True,
+    )
+
+    last_png = museScore.findLastPNGPath(fp)
+    last_number, num_digits = museScore.findPNGRange(fp, last_png)
+
+    pages: dict[int, np.ndarray] = {}
+    stem = str(fp)[:str(fp).rfind('-')]
+    for pg in range(1, last_number + 1):
+        page_str = stem + '-' + str(pg).zfill(num_digits) + '.png'
+        page = np.array(mpimg.imread(page_str) * 255, dtype = np.uint8)
+
+        # Invert the color because dark mode
+        if invert_color:
+            page[:, :, :3] = 255 - page[:, :, :3]
+        pages[pg] = page
+
+    if is_ipython() and not skip_display:
+        from IPython.display import Image, display, HTML
+
+        for pg in range(1, last_number + 1):
+            with tempfile.NamedTemporaryFile(suffix=".png") as f:
+                mpimg.imsave(f.name, pages[pg])
+                display(Image(data=f.read(), retina=True))
+            if pg < last_number:
+                display(HTML('<p style="padding-top: 20px">&nbsp;</p>'))
+
+    defaults.title = savedDefaultTitle
+    defaults.author = savedDefaultAuthor
+    return pages

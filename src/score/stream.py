@@ -60,10 +60,6 @@ class M21StreamWrapper(M21Wrapper[T]):
         """Returns an iterator of rests in the stream"""
         return [M21Rest(n) for n in self._data.recurse().notes if isinstance(n, Rest)]
 
-    def show(self, fmt = None):
-        """Calls the show method of the music21 Stream object. Refer to the music21 documentation for more information."""
-        return self._data.show(fmt)
-
     def _sanitize_in_place(self):
         super()._sanitize_in_place()
         # This seems to lead to weird behavior

@@ -40,11 +40,11 @@ def pitch_class_from_chroma(chroma: NDArray):
     return np.mod(chroma - 3, 12)
 
 
-def compute_chroma_array(sorted_ocp: NDArray) -> NDArray[PitchType]:
-    return chroma_from_chromatic_pitch(sorted_ocp[:, 1]).astype(int)
+def compute_chroma_array(chromatic_pitch: NDArray[np.int_]) -> NDArray[np.int_]:
+    return chroma_from_chromatic_pitch(chromatic_pitch).astype(int)
 
 
-def compute_chroma_vector_array(chroma_array: NDArray[PitchType], K_pre: int, K_post: int):
+def compute_chroma_vector_array(chroma_array: NDArray[np.int_], K_pre: int, K_post: int) -> NDArray[np.int_]:
     """
     Computes the chroma frequency distribution within the context surrounding
     each note.
@@ -72,7 +72,7 @@ def compute_chroma_vector_array(chroma_array: NDArray[PitchType], K_pre: int, K_
 
     return np.array(chroma_vector_list)
 
-
+# The morph pitch is the diatonic pitch class of the note. Middle C is 23.
 def compute_morph_array(chroma_array, chroma_vector_array):
     n = len(chroma_array)
     # Line 1: Initialize morph array
@@ -146,24 +146,8 @@ def compute_ocm_chord_list(sorted_ocp, chroma_array, morph_array):
     return ocm_chord_list
 
 
-def compute_morphetic_pitch(sorted_ocp: NDArray, morph_array: NDArray):
-    """
-    Compute morphetic pitch
-
-    Parameters
-    ----------
-    sorted_ocp : array
-       Sorted array of (onset in beats, chromatic pitch)
-    morph_array : array
-       Array of morphs
-
-    Returns
-    -------
-    morphetic_pitch : array
-        Morphetic pitch of the notes
-    """
-    n = len(sorted_ocp)
-    chromatic_pitch = sorted_ocp[:, 1]
+def compute_morphetic_pitch(chromatic_pitch: NDArray, morph_array: NDArray):
+    n = len(chromatic_pitch)
     morph = morph_array.reshape(-1, 1)
 
     morph_oct_1 = np.floor(chromatic_pitch / 12.0).astype(int)
@@ -200,62 +184,45 @@ def chromatic_pitch_to_pitch_name(chromatic_pitch: NDArray[PitchType], morphetic
     asa_octave[morph > 1] += 1
     return step, alter, asa_octave
 
-def predict_spelling(note_reps: list[NoteRepresentation], context_window: tuple[int, int] = (10, 40)):
-    note_array = np.array([
-        (note.onset_beat, note.duration_beat, note.pitch, note.step, note.alter, note.octave, "", 0, 0)
-    for note in note_reps], dtype = np.dtype(
-        [('onset_beat', float), ('duration_beat', float), ('pitch', int),
-         ('real_step', "U1"), ('real_alter', int), ('real_octave', int),
-        ("pred_step", "U1"), ("pred_alter", int), ("pred_octave", int)]
-    ))
-
-    # Sort the notes by pitch and then by onset
-    pitch_sort_idx = note_array["pitch"].argsort()
-    onset_sort_idx = np.argsort(note_array[pitch_sort_idx]["onset_beat"], kind="mergesort")
-    sort_idx = pitch_sort_idx[onset_sort_idx]
-
-    reverse_idx = sort_idx.argsort()  # Reverse the sorting to get back to the original order
+def predict_spelling(sorted_note_reps: list[NoteRepresentation], context_window: tuple[int, int] = (10, 40)):
+    """Performs stage 1 of Meredith's ps13 algorithm. Assumes the note representations are sorted (i.e. straight from s.get_note_representation())"""
+    onset = np.array([note.onset_beat for note in sorted_note_reps], dtype=np.float64)
+    pitch = np.array([note.pitch for note in sorted_note_reps], dtype=np.int64)
+    duration = np.array([note.duration_beat for note in sorted_note_reps], dtype=np.float64)
 
     # ocp = onset, chromatic pitch
-    sorted_ocp = np.column_stack(
-        (
-            note_array[sort_idx]["onset_beat"],
-            chromatic_pitch_from_midi(note_array[sort_idx]["pitch"]),
-        )
-    )
+    chromatic_pitch = chromatic_pitch_from_midi(pitch)
 
-    chroma_array = compute_chroma_array(sorted_ocp=sorted_ocp)
+    # Shape (n,). arr[i] is the chroma of the ith note, where C is 0
+    chroma_array = compute_chroma_array(chromatic_pitch)
+
+    # Shape (n, 12). arr[i] is the chroma vector of the ith note, where C is 0
+    # aka the number of notes in the context window
     chroma_vector_array = compute_chroma_vector_array(
         chroma_array=chroma_array, K_pre=context_window[0], K_post=context_window[1]
     )
+
+    # Shape (n,). arr[i] is the morph of the ith note, where A is 0
     morph_array = compute_morph_array(
         chroma_array=chroma_array, chroma_vector_array=chroma_vector_array
     )
 
-    morphetic_pitch = compute_morphetic_pitch(sorted_ocp, morph_array)
+    # Shape (n,). arr[i] is the morphetic pitch of the ith note i.e. the morphetic pitch implied by the morph and the pitch number
+    morphetic_pitch = compute_morphetic_pitch(chromatic_pitch, morph_array)
 
-    step, alter, octave = chromatic_pitch_to_pitch_name(
-        sorted_ocp[:, 1],
-        morphetic_pitch.reshape(-1,),
-    )
 
-    # sort back pitch names
-    step = step[reverse_idx]
-    alter = alter[reverse_idx]
-    octave = octave[reverse_idx]
+    step, alter, octave = chromatic_pitch_to_pitch_name(chromatic_pitch, morphetic_pitch.reshape(-1,))
 
-    note_array["pred_step"] = step
-    note_array["pred_alter"] = alter
-    note_array["pred_octave"] = octave
+    notes = [PredictedNote(
+        onset_beat=note.onset_beat,
+        pitch=note.pitch,
+        duration_beat=note.duration_beat,
+        pred_step=s,
+        pred_alter=a,
+        pred_octave=o,
+        real_step=note.step,
+        real_alter=note.alter,
+        real_octave=note.octave,
+    ) for note, s, a, o in zip(sorted_note_reps, step, alter, octave)]
 
-    return [PredictedNote(
-        onset_beat=note["onset_beat"],
-        duration_beat=note["duration_beat"],
-        pitch=note["pitch"],
-        real_step=note["real_step"],
-        real_alter=note["real_alter"],
-        real_octave=note["real_octave"],
-        pred_step=note["pred_step"],
-        pred_alter=note["pred_alter"],
-        pred_octave=note["pred_octave"]
-    ) for note in note_array]
+    return notes

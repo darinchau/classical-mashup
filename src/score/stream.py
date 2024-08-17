@@ -300,7 +300,9 @@ class M21Score(M21StreamWrapper[Score]):
         return pt.load_score(tmp_path)
 
     def get_note_representation_list(self):
-        """Returns a list of NoteRepresentation objects for each note in the score"""
+        """Returns a list of NoteRepresentation objects for each note in the score
+
+        The note representations are sorted by onset_beat and then pitch"""
         from ..analysis.representation import NoteRepresentation
         from partitura.utils.music import ensure_notearray
         extended_score_note_array = ensure_notearray(
@@ -311,7 +313,8 @@ class M21Score(M21StreamWrapper[Score]):
             include_metrical_position=True, # adds 3 fields: is_downbeat, rel_onset_div, tot_measure_div
             include_grace_notes=True # adds 2 fields: is_grace, grace_type
         )
-        return [NoteRepresentation.from_array(x) for x in extended_score_note_array]
+        reps = [NoteRepresentation.from_array(x) for x in extended_score_note_array]
+        return sorted(reps, key = lambda x: (x.onset_beat, x.pitch))
 
 Q = TypeVar("Q", bound=Stream)
 def _parse(path: str, expected_type: type[Q]) -> Q:

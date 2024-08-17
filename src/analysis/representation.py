@@ -53,7 +53,7 @@ class NoteRepresentation:
     pitch: int
     voice: int
     id: str
-    step: str
+    step_: str
     alter: int
     octave: int
     is_grace: int
@@ -66,9 +66,18 @@ class NoteRepresentation:
     rel_onset_div: int
     tot_measure_div: int
 
+    def __post_init__(self):
+        assert self.step_ in ("C", "D", "E", "F", "G", "A", "B")
+
     def __repr__(self):
         accidental = "#" if self.alter == 1 else "b" if self.alter == -1 else ""
         return f"NoteRepresentation({self.step}{accidental}{self.octave} at t={self.onset_beat})"
+
+    @property
+    def step(self):
+        """The step of the note"""
+        assert self.step_ in ("C", "D", "E", "F", "G", "A", "B")
+        return self.step_
 
     @classmethod
     def from_array(cls, array):
@@ -82,7 +91,7 @@ class NoteRepresentation:
             pitch = int(array["pitch"]),
             voice = int(array["voice"]),
             id = array["id"],
-            step = array["step"],
+            step_ = array["step"],
             alter = int(array["alter"]),
             octave = int(array["octave"]),
             is_grace = int(array["is_grace"]),

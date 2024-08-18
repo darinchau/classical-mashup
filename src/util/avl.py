@@ -118,6 +118,7 @@ def delete(node, key):
     return node
 
 class AVLTree(Generic[T]):
+    """A generic AVL tree implementation with insert, delete, and get operations."""
     class Node:
         def __init__(self, key: T):
             self.key = key
@@ -187,3 +188,30 @@ class AVLTree(Generic[T]):
         if idx < 0 or idx >= len(self):
             raise IndexError
         return getitem(self.key, idx)
+
+    @staticmethod
+    def from_array(arr: list[T]) -> AVLTree[T]:
+        """Create an AVL tree from an array."""
+        tree = AVLTree()
+        for x in arr:
+            tree.insert(x)
+        return tree
+
+    @staticmethod
+    def from_sorted_array(arr: list[T], _check: bool = False):
+        """Create an AVL tree from a sorted array."""
+        def from_sorted_array(arr: list[T]):
+            if not arr:
+                return None
+            mid = len(arr) // 2
+            node = AVLTree.Node(arr[mid])
+            node.left = from_sorted_array(arr[:mid])
+            node.right = from_sorted_array(arr[mid + 1:])
+            update_height(node)
+            return node
+        if _check:
+            for i in range(1, len(arr)):
+                assert arr[i - 1] < arr[i]
+        tree = AVLTree()
+        tree.key = from_sorted_array(arr)
+        return tree

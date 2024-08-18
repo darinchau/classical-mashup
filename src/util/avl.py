@@ -215,3 +215,12 @@ class AVLTree(Generic[T]):
         tree = AVLTree()
         tree.key = from_sorted_array(arr)
         return tree
+
+    def iter(self):
+        def inorder(node: AVLTree.Node | None):
+            if node is None:
+                return
+            yield from inorder(node.left)
+            yield node.key
+            yield from inorder(node.right)
+        return inorder(self.key)

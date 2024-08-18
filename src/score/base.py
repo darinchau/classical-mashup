@@ -35,9 +35,9 @@ class ScoreRepresentation(ABC):
 
     ### These methods can be overridden by subclasses to be more efficient ###
     def note_elements(self) -> Iterable[NoteElement]:
-        """Returns an iterable of (onset, pitch, duration) tuples."""
+        """Returns an iterable of note elements in the score. The order of the notes is always sorted by (onset, pitch, duration)"""
         from .standard import NoteElement
-        for element in self.to_standard().flatten():
+        for element in self.to_standard().iter():
             if isinstance(element, NoteElement):
                 yield element
 

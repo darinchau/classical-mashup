@@ -5,6 +5,7 @@ import numpy as np
 from ..score import M21Score
 from .standard import StandardScore, NoteElement
 from .base import ScoreRepresentation
+from typing import Iterable
 
 @dataclass(frozen=True)
 class PartituraNote:
@@ -146,7 +147,7 @@ class PartituraScore(ScoreRepresentation):
                 duration = note.duration_quarter,
                 note_name=note.to_simple_note(),
                 octave=note.octave,
-                voice=0
+                voice=note.voice
             ) for note in self.notes
         ])
 
@@ -199,8 +200,19 @@ class PartituraScore(ScoreRepresentation):
             ('tot_measure_div', '<i4')
         ])
 
+    ### Helper conversion methods ###
     @classmethod
     def from_score(cls, score: ScoreRepresentation):
         if isinstance(score, M21Score):
             return score.to_partitura()
         return super().from_score(score)
+
+    def note_elements(self) -> Iterable[NoteElement]:
+        for x in sorted(self.notes, key=lambda x: (x.onset_quarter, x.pitch, x.duration_quarter)):
+            yield NoteElement(
+                onset = x.onset_quarter,
+                duration = x.duration_quarter,
+                note_name = x.to_simple_note(),
+                octave = x.octave,
+                voice = x.voice
+            )

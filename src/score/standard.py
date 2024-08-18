@@ -192,6 +192,9 @@ class StandardScore(ScoreRepresentation):
         score.elements = AVLTree.from_sorted_array(arr, _check=_check)
         return score
 
+    def iter(self):
+        return self.elements.iter()
+
     def insert(self, element: StandardScoreElement):
         self.elements.insert(element)
 

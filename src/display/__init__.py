@@ -1,6 +1,5 @@
 # The module responsible for displaying scores and stuff
 from ..score.music21 import M21Score, M21Object
-from ..analysis.representation import NoteRepresentation
 from ..score.music21 import get_offset_to_score
 from ..util import is_ipython
 from music21 import expressions, style, stream

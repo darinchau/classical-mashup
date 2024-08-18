@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from src.score.standard import NoteElement
+
 from ..audio import Audio
 from ..util import is_ipython
 from .base import ScoreRepresentation
@@ -249,6 +251,26 @@ class M21Score(ScoreRepresentation):
                         part_measure_number.add(measure.number)
                 assert part_measure_number == measure_numbers, f"Part {part.id} does not have the same measure numbers as the score. {part_measure_number ^ measure_numbers}"
 
+    @classmethod
+    def from_tiny_notation(cls, notation: str):
+        """Create a score from a tiny notation string"""
+        tnc = m21.tinyNotation.Converter()
+
+        class ChordState(m21.tinyNotation.State):
+            def affectTokenAfterParse(self, n):
+                super(ChordState, self).affectTokenAfterParse(n)
+                return None # do not append Note object
+
+            def end(self):
+                ch = Chord(self.affectedTokens)
+                ch.duration = self.affectedTokens[0].duration
+                return ch
+
+        tnc.bracketStateMapping['chord'] = ChordState
+        tnc.load(f"tinyNotation: {notation}")
+        return M21Score(Score(tnc.parse().stream))
+
+    ### Helper conversion methods ###
     def to_partitura(self):
         """Returns a list of NoteRepresentation objects for each note in the score
 
@@ -269,24 +291,8 @@ class M21Score(ScoreRepresentation):
         reps = [PartituraNote.from_array(x) for x in extended_score_note_array]
         return PartituraScore(extended_score_note_array)
 
-    @classmethod
-    def from_tiny_notation(cls, notation: str):
-        """Create a score from a tiny notation string"""
-        tnc = m21.tinyNotation.Converter()
-
-        class ChordState(m21.tinyNotation.State):
-            def affectTokenAfterParse(self, n):
-                super(ChordState, self).affectTokenAfterParse(n)
-                return None # do not append Note object
-
-            def end(self):
-                ch = Chord(self.affectedTokens)
-                ch.duration = self.affectedTokens[0].duration
-                return ch
-
-        tnc.bracketStateMapping['chord'] = ChordState
-        tnc.load(f"tinyNotation: {notation}")
-        return M21Score(Score(tnc.parse().stream))
+    def note_elements(self) -> Iterable[NoteElement]:
+        return self.to_partitura().note_elements()
 
 Q = TypeVar("Q", bound=Stream)
 def _parse(path: str, expected_type: type[Q]) -> Q:

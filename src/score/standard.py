@@ -1,6 +1,7 @@
 from __future__ import annotations
 from .base import ScoreRepresentation
 from .simplenote import SimpleNote
+from ..util.avl import AVLTree
 import enum
 from dataclasses import dataclass, astuple
 from math import log2, isclose
@@ -38,10 +39,17 @@ class NoteElement(StandardScoreElement):
     octave: int
     "octave: int. Middle C is octave 4. Bottom note is A0. Top note is C8."
 
+    voice: int
+    """voice: int - If there are any voices in the score, this is the voice number.
+
+    To reconstruct the M21 Score, we store the nth part in the right hand as n, and -n in the left hand.
+    If there are no voice information in the score, this is 0."""
+
     @classmethod
-    def from_str(cls, onset: float, duration: float, note: str):
+    def from_note_name(cls, note: str):
+        """Purely for testing purposes. Converts a string note to a NoteElement."""
         octave = int(note[-1])
-        return cls(onset, duration, SimpleNote(note[:-1]), octave)
+        return cls(0.0, 1.0, SimpleNote(note[:-1]), octave, 0)
 
     @property
     def pitch_number(self):
@@ -52,6 +60,11 @@ class NoteElement(StandardScoreElement):
     def step_number(self):
         """The step number of the note. Middle C is 23 and in/decreases by 1 for each step."""
         return 7 * self.octave + self.note_name.step_number - 5
+
+    @property
+    def step_name(self):
+        """The step name of the note. Middle C is C4."""
+        return self.note_name.step
 
     def __key__(self):
         return (self.onset, self.pitch_number)
@@ -155,8 +168,6 @@ class Articulation(StandardScoreElement):
     def from_str(cls, onset: float, articulation: str):
         return cls(onset, ArticulationType(articulation))
 
-### AVL Tree implementation ###
-
 
 class StandardScore(ScoreRepresentation):
     """Defines a standard score representation to which all scores must conform.
@@ -164,3 +175,44 @@ class StandardScore(ScoreRepresentation):
     information about how to reconstruct a score, such as the element type and its
     onset and duration.
     """
+    def __init__(self):
+        self.elements = AVLTree()
+
+    @classmethod
+    def from_array(cls, array: list[StandardScoreElement]):
+        """Create a StandardScore from an array."""
+        score = cls()
+        score.elements = AVLTree.from_array(array)
+        return score
+
+    @classmethod
+    def from_sorted_array(cls, arr: list[StandardScoreElement], _check: bool = False):
+        """Create a StandardScore from a sorted array."""
+        score = cls()
+        score.elements = AVLTree.from_sorted_array(arr, _check=_check)
+        return score
+
+    def insert(self, element: StandardScoreElement):
+        self.elements.insert(element)
+
+    def delete(self, element: StandardScoreElement):
+        self.elements.delete(element)
+
+    def flatten(self) -> list[StandardScoreElement]:
+        return self.elements.flatten()
+
+    def __contains__(self, x: StandardScoreElement):
+        return x in self.elements
+
+    def empty(self):
+        return self.elements.empty()
+
+    def __len__(self):
+        return len(self.elements)
+
+    @classmethod
+    def parse(cls, path: str) -> StandardScore:
+        # Load as music21 score and convert to standard score
+        from .music21 import M21Score
+        m21score = M21Score.parse(path)
+        return m21score.to_standard()

@@ -249,29 +249,25 @@ class M21Score(ScoreRepresentation):
                         part_measure_number.add(measure.number)
                 assert part_measure_number == measure_numbers, f"Part {part.id} does not have the same measure numbers as the score. {part_measure_number ^ measure_numbers}"
 
-    def _convert_to_partitura(self):
-        """Convert the score to a Partitura object."""
-        import partitura as pt
-        # The load_music21 method doesnt seem to work properly. This is more consistent
-        tmp_path = self._data.write("musicxml")
-        return pt.load_score(tmp_path)
-
-    def get_note_representation_list(self):
+    def to_partitura(self):
         """Returns a list of NoteRepresentation objects for each note in the score
 
         The note representations are sorted by onset_beat and then pitch"""
-        from ..analysis.representation import NoteRepresentation
+        from .partitura import PartituraNote, PartituraScore
         from partitura.utils.music import ensure_notearray
+        import partitura as pt
+        # The load_music21 method doesnt seem to work properly. This is more consistent
+        tmp_path = self._data.write("musicxml")
         extended_score_note_array = ensure_notearray(
-            self._convert_to_partitura(),
+            pt.load_score(tmp_path),
             include_pitch_spelling=True, # adds 3 fields: step, alter, octave
             include_key_signature=True, # adds 2 fields: ks_fifths, ks_mode
             include_time_signature=True, # adds 2 fields: ts_beats, ts_beat_type
             include_metrical_position=True, # adds 3 fields: is_downbeat, rel_onset_div, tot_measure_div
             include_grace_notes=True # adds 2 fields: is_grace, grace_type
         )
-        reps = [NoteRepresentation.from_array(x) for x in extended_score_note_array]
-        return sorted(reps, key = lambda x: (x.onset_beat, x.pitch))
+        reps = [PartituraNote.from_array(x) for x in extended_score_note_array]
+        return PartituraScore(extended_score_note_array)
 
     @classmethod
     def from_tiny_notation(cls, notation: str):

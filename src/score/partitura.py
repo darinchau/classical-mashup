@@ -1,11 +1,13 @@
-# Implements various data structure representations for a score
+# Implements the partitura representation of a score
 from __future__ import annotations
 from dataclasses import dataclass
 import numpy as np
 from ..score import M21Score
+from .standard import StandardScore, NoteElement
+from .base import ScoreRepresentation
 
 @dataclass(frozen=True)
-class NoteRepresentation:
+class PartituraNote:
     """Each note is a detailed representation of a note in a score. A list of these uniquely represent a score.
 
     Implements the partitura representation.
@@ -116,5 +118,89 @@ class NoteRepresentation:
         return self.onset_quarter + self.duration_quarter
 
     def to_simple_note(self):
-        from .scales import SimpleNote
+        from .simplenote import SimpleNote
         return SimpleNote.from_step_alter(self.step, self.alter)
+
+    def __lt__(self, other: PartituraNote):
+        return (self.onset_beat, self.pitch) < (other.onset_beat, other.pitch)
+
+class PartituraScore(ScoreRepresentation):
+    """The partitura score is not really the partitura score - rather it is a list of notes that resembles the structured arrays of partitura scores.
+    This way it is easy to convert to and from the standard score representation, but also easy to use in partitura-specific methods."""
+    def __init__(self, notes: list[PartituraNote] | np.ndarray):
+        if isinstance(notes, np.ndarray):
+            notes = [PartituraNote.from_array(note) for note in notes]
+        self.notes = notes
+
+    def __eq__(self, other: PartituraScore):
+        return sorted(self.notes) == sorted(other.notes)
+
+    @classmethod
+    def from_standard(cls, score: StandardScore) -> PartituraScore:
+        return M21Score.from_standard(score).to_partitura()
+
+    def to_standard(self) -> StandardScore:
+        return StandardScore.from_array([
+            NoteElement(
+                onset = note.onset_quarter,
+                duration = note.duration_quarter,
+                note_name=note.to_simple_note(),
+                octave=note.octave,
+                voice=0
+            ) for note in self.notes
+        ])
+
+    def to_note_array(self):
+        return np.array([
+            (
+                note.onset_beat,
+                note.duration_beat,
+                note.onset_quarter,
+                note.duration_quarter,
+                note.onset_div,
+                note.duration_div,
+                note.pitch,
+                note.voice,
+                note.id,
+                note.step,
+                note.alter,
+                note.octave,
+                note.is_grace,
+                note.grace_type,
+                note.ks_fifths,
+                note.ks_mode,
+                note.ts_beats,
+                note.ts_beat_type,
+                note.is_downbeat,
+                note.rel_onset_div,
+                note.tot_measure_div
+            ) for note in self.notes
+        ], dtype = [
+            ('onset_beat', '<f4'),
+            ('duration_beat', '<f4'),
+            ('onset_quarter', '<f4'),
+            ('duration_quarter', '<f4'),
+            ('onset_div', '<i4'),
+            ('duration_div', '<i4'),
+            ('pitch', '<i4'),
+            ('voice', '<i4'),
+            ('id', '<U256'),
+            ('step', '<U256'),
+            ('alter', '<i4'),
+            ('octave', '<i4'),
+            ('is_grace', 'i1'),
+            ('grace_type', '<U256'),
+            ('ks_fifths', '<i4'),
+            ('ks_mode', '<i4'),
+            ('ts_beats', '<i4'),
+            ('ts_beat_type', '<i4'),
+            ('is_downbeat', '<i4'),
+            ('rel_onset_div', '<i4'),
+            ('tot_measure_div', '<i4')
+        ])
+
+    @classmethod
+    def from_score(cls, score: ScoreRepresentation):
+        if isinstance(score, M21Score):
+            return score.to_partitura()
+        return super().from_score(score)

@@ -1,8 +1,8 @@
-from .representation import NoteRepresentation
 import numpy as np
 from numpy.typing import NDArray
 from dataclasses import dataclass
 import typing
+from ..score import StandardScore, ScoreRepresentation
 
 STEPS = np.array(["A", "B", "C", "D", "E", "F", "G"])
 UNDISPLACED_CHROMA = np.array([0, 2, 3, 5, 7, 8, 10], dtype=int)
@@ -184,11 +184,12 @@ def chromatic_pitch_to_pitch_name(chromatic_pitch: NDArray[PitchType], morphetic
     asa_octave[morph > 1] += 1
     return step, alter, asa_octave
 
-def predict_spelling(sorted_note_reps: list[NoteRepresentation], context_window: tuple[int, int] = (10, 40)):
+def predict_spelling(score: ScoreRepresentation, context_window: tuple[int, int] = (10, 40)):
     """Performs stage 1 of Meredith's ps13 algorithm. Assumes the note representations are sorted (i.e. straight from s.get_note_representation())"""
-    onset = np.array([note.onset_beat for note in sorted_note_reps], dtype=np.float64)
-    pitch = np.array([note.pitch for note in sorted_note_reps], dtype=np.int64)
-    duration = np.array([note.duration_beat for note in sorted_note_reps], dtype=np.float64)
+    notes = list(score.note_elements())
+    onset = np.array([n.onset for n in notes], dtype=np.float64)
+    pitch = np.array([n.pitch_number for n in notes], dtype=np.int64)
+    duration = np.array([n.duration for n in notes], dtype=np.float64)
 
     # ocp = onset, chromatic pitch
     chromatic_pitch = chromatic_pitch_from_midi(pitch)
@@ -213,16 +214,16 @@ def predict_spelling(sorted_note_reps: list[NoteRepresentation], context_window:
     step, alter, octave = chromatic_pitch_to_pitch_name(chromatic_pitch, morphetic_pitch.reshape(-1,))
 
     notes = [PredictedNote(
-        onset_beat=note.onset_beat,
-        pitch=note.pitch,
-        duration_beat=note.duration_beat,
+        onset_beat=note.onset,
+        pitch=note.pitch_number,
+        duration_beat=note.duration,
         pred_step=s,
         pred_alter=a,
         pred_octave=o,
-        real_step=note.step,
-        real_alter=note.alter,
+        real_step=note.note_name.step,
+        real_alter=note.note_name.alter,
         real_octave=note.octave,
-    ) for note, s, a, o in zip(sorted_note_reps, step, alter, octave)]
+    ) for note, s, a, o in zip(notes, step, alter, octave)]
 
     return notes
 

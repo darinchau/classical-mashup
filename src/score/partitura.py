@@ -138,7 +138,22 @@ class PartituraScore(ScoreRepresentation):
 
     @classmethod
     def from_standard(cls, score: StandardScore) -> PartituraScore:
-        return M21Score.from_standard(score).to_partitura()
+        from .partitura import PartituraNote, PartituraScore
+        from partitura.utils.music import ensure_notearray
+        import partitura as pt
+
+        m21score = M21Score.from_standard(score)._sanitize_in_place()
+        # The load_music21 method doesnt seem to work properly. This is more consistent
+        tmp_path = m21score._data.write("musicxml")
+        extended_score_note_array = ensure_notearray(
+            pt.load_score(tmp_path),
+            include_pitch_spelling=True, # adds 3 fields: step, alter, octave
+            include_key_signature=True, # adds 2 fields: ks_fifths, ks_mode
+            include_time_signature=True, # adds 2 fields: ts_beats, ts_beat_type
+            include_metrical_position=True, # adds 3 fields: is_downbeat, rel_onset_div, tot_measure_div
+            include_grace_notes=True # adds 2 fields: is_grace, grace_type
+        )
+        return PartituraScore(extended_score_note_array)
 
     def to_standard(self) -> StandardScore:
         return StandardScore.from_array([
@@ -201,12 +216,6 @@ class PartituraScore(ScoreRepresentation):
         ])
 
     ### Helper conversion methods ###
-    @classmethod
-    def from_score(cls, score: ScoreRepresentation):
-        if isinstance(score, M21Score):
-            return score.to_partitura()
-        return super().from_score(score)
-
     def note_elements(self) -> Iterable[NoteElement]:
         for x in sorted(self.notes, key=lambda x: (x.onset_quarter, x.pitch, x.duration_quarter)):
             yield NoteElement(

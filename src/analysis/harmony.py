@@ -25,8 +25,14 @@ class PredictedNote:
     pred_octave: int
 
     def to_simple_note(self):
+        """Converts the predicted note to a SimpleNote"""
         from scales import SimpleNote
         return SimpleNote.from_step_alter(self.pred_step, self.pred_alter)
+
+    @property
+    def is_accurate(self):
+        """Returns true if the predicted note is accurate"""
+        return self.pred_alter == self.real_alter and self.pred_octave == self.real_octave and self.pred_step == self.real_step
 
 def chromatic_pitch_from_midi(midi_pitch: NDArray[PitchType]):
     return midi_pitch - 21
@@ -226,7 +232,3 @@ def predict_spelling(score: ScoreRepresentation, context_window: tuple[int, int]
     ) for note, s, a, o in zip(notes, step, alter, octave)]
 
     return notes
-
-# Some utility
-def get_accuracy(notes: list[PredictedNote]):
-    return sum(n.pred_alter == n.real_alter and n.pred_octave == n.real_octave and n.pred_step == n.real_step for n in notes) / len(notes)

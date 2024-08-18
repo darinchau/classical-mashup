@@ -11,12 +11,18 @@ class StandardScoreElement:
     onset: float
     "onset: float (in quarter notes from start)"
 
+    def __eq__(self, other: StandardScoreElement):
+        if self.__class__ != other.__class__:
+            return False
+        return isclose(self.onset, other.onset) and self.__key__() == other.__key__()
+
     def __lt__(self, other: StandardScoreElement):
         if self.onset < other.onset:
             return True
 
-        if self.__class__.__name__ != other.__class__.__name__:
-            return self.__class__.__name__ < other.__class__.__name__
+        sort_order = (KeySignature, TimeSignature, Tempo, NoteElement, Expression, Dynamics, TextExpression)
+        if self.__class__ != other.__class__:
+            return sort_order.index(self.__class__) < sort_order.index(other.__class__)
 
         return self.__key__() < other.__key__()
 
@@ -28,7 +34,7 @@ class StandardScoreElement:
         assert self.onset >= 0
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class NoteElement(StandardScoreElement):
     duration: float
     "duration: float (in quarter notes from start)"
@@ -67,10 +73,10 @@ class NoteElement(StandardScoreElement):
         return self.note_name.step
 
     def __key__(self):
-        return (self.onset, self.pitch_number)
+        return (self.onset, self.pitch_number, self.duration)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class KeySignature(StandardScoreElement):
     nsharps: int
     "nsharps: int (flats will be negative number)"
@@ -86,7 +92,7 @@ class KeySignature(StandardScoreElement):
         return SimpleNote.from_index(self.nsharps)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class TimeSignature(StandardScoreElement):
     beats: int
     "beats: int (numerator)"
@@ -99,7 +105,7 @@ class TimeSignature(StandardScoreElement):
         assert self.beat_type in (2, 4, 8, 16), f"Invalid beat type {self.beat_type}"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class Tempo(StandardScoreElement):
     note_value: int
     "note_value: int (1 for quarter note, 2 for half note, etc.)"
@@ -119,7 +125,7 @@ class ExpressionType(enum.StrEnum):
     INVERTED_MORDENT = "inverted-mordent"
     FERMATA = "fermata"
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class Expression(StandardScoreElement):
     expression: ExpressionType
 
@@ -135,7 +141,7 @@ class Expression(StandardScoreElement):
         return set(x.value for x in ExpressionType)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class TextExpression(StandardScoreElement):
     text: str
 
@@ -153,7 +159,7 @@ class DynamicsType(enum.StrEnum):
     FP = "fp"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class Dynamics(StandardScoreElement):
     dynamics: DynamicsType
 

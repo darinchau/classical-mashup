@@ -98,6 +98,8 @@ class M21Score(ScoreRepresentation):
             assert len(parts) == nparts, f"Measure {offset} does not have the same number of parts as the score. {len(parts)} != {self.nparts}"
 
     def _sanitize_in_place(self):
+        self._remove_all_grace_notes_in_place()
+        self._data.stripTies(inPlace=True)
         sanitize_m21object(self._data)
         self._fix_measure_numbers_in_place()
         self._check_measure_numbers()
@@ -112,8 +114,9 @@ class M21Score(ScoreRepresentation):
 
     def to_standard(self) -> StandardScore:
         score = StandardScore()
-        for el in self._data.recurse().getElementsByClass((Note, Chord, KeySignature, TimeSignature, MetronomeMark, Expression, Dynamic, Articulation)):
-            offset = get_offset_to_score(el, self)
+        m21score = self.sanitize()
+        for el in m21score._data.recurse().getElementsByClass((Note, Chord, KeySignature, TimeSignature, MetronomeMark, Expression, Dynamic, Articulation)):
+            offset = get_offset_to_score(el, m21score)
             if offset is None:
                 warnings.warn(f"Unable to get offset: {el}")
                 continue
@@ -349,29 +352,6 @@ class M21Score(ScoreRepresentation):
         tnc.load(f"tinyNotation: {notation}")
         return M21Score(Score(tnc.parse().stream))
 
-    ### Helper conversion methods ###
-    def to_partitura(self):
-        """Returns a list of NoteRepresentation objects for each note in the score
-
-        The note representations are sorted by onset_beat and then pitch"""
-        from .partitura import PartituraNote, PartituraScore
-        from partitura.utils.music import ensure_notearray
-        import partitura as pt
-        # The load_music21 method doesnt seem to work properly. This is more consistent
-        tmp_path = self._data.write("musicxml")
-        extended_score_note_array = ensure_notearray(
-            pt.load_score(tmp_path),
-            include_pitch_spelling=True, # adds 3 fields: step, alter, octave
-            include_key_signature=True, # adds 2 fields: ks_fifths, ks_mode
-            include_time_signature=True, # adds 2 fields: ts_beats, ts_beat_type
-            include_metrical_position=True, # adds 3 fields: is_downbeat, rel_onset_div, tot_measure_div
-            include_grace_notes=True # adds 2 fields: is_grace, grace_type
-        )
-        reps = [PartituraNote.from_array(x) for x in extended_score_note_array]
-        return PartituraScore(extended_score_note_array)
-
-    def note_elements(self) -> Iterable[NoteElement]:
-        return self.to_partitura().note_elements()
 
 Q = TypeVar("Q", bound=Stream)
 def _parse(path: str, expected_type: type[Q]) -> Q:
@@ -543,7 +523,6 @@ def sanitize_barline(barline: Barline):
         barline.type = "regular"
 
 def sanitize_stream(stream: Stream):
-    _remove_all_grace_notes_in_place(stream)
     for el in stream:
         # assert isinstance(el, M21Object), f"Element {el} is not a music21 object"
         if not is_type_allowed(el) or not check_obj(el):

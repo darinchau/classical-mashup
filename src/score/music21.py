@@ -5,7 +5,16 @@ from src.score.standard import NoteElement
 from ..audio import Audio
 from ..util import is_ipython
 from .base import ScoreRepresentation
-from .standard import StandardScore
+from .standard import StandardScore, StandardScoreElement, NoteElement, DynamicsType, ExpressionType
+from .standard import (
+    KeySignature as StandardKeySignature,
+    TimeSignature as StandardTimeSignature,
+    Tempo as StandardTempo,
+    Dynamics as StandardDynamics,
+    Expression as StandardExpression,
+    TextExpression as StandardTextExpression,
+)
+from .simplenote import SimpleNote
 from fractions import Fraction
 from music21 import common
 from music21.articulations import Accent, Staccato, Tenuto
@@ -25,6 +34,7 @@ from music21.meter.base import TimeSignature
 from music21.midi.translate import streamToMidiFile
 from music21.note import NotRest, Note, Rest, Lyric, GeneralNote
 from music21.stream.base import Stream, Score, Part, Measure, Opus, Voice, PartStaff
+from music21.tempo import MetronomeMark
 from typing import TypeVar, Generic, Iterable, Literal
 import base64
 import copy
@@ -101,7 +111,76 @@ class M21Score(ScoreRepresentation):
         return self._data.iter()
 
     def to_standard(self) -> StandardScore:
-        raise NotImplementedError
+        score = StandardScore()
+        for el in self._data.recurse().getElementsByClass((Note, Chord, KeySignature, TimeSignature, MetronomeMark, Expression, Dynamic, Articulation)):
+            offset = get_offset_to_score(el, self)
+            if offset is None:
+                warnings.warn(f"Unable to get offset: {el}")
+                continue
+            offset = float(offset)
+            if isinstance(el, Note):
+                score.insert(NoteElement(
+                    onset = offset,
+                    duration = float(el.duration.quarterLength),
+                    note_name = SimpleNote.from_note(el),
+                    octave = el.pitch.implicitOctave,
+                    voice = 0, # TODO support multiple voices
+                ))
+            elif isinstance(el, Chord):
+                for p in el.pitches:
+                    score.insert(NoteElement(
+                        onset=offset,
+                        duration=float(el.duration.quarterLength),
+                        note_name=SimpleNote.from_pitch(p),
+                        octave=p.implicitOctave,
+                        voice = 0
+                    ))
+            elif isinstance(el, Key):
+                mode = 1 if el.mode == "minor" else 0 if el.mode == "major" else -1
+                score.insert(StandardKeySignature(
+                    onset=offset,
+                    nsharps=el.sharps,
+                    mode = mode
+                ))
+            elif isinstance(el, KeySignature):
+                score.insert(StandardKeySignature(
+                    onset=offset,
+                    nsharps=el.sharps,
+                    mode=-1
+                ))
+            elif isinstance(el, TimeSignature):
+                if el.numerator is None or el.denominator is None:
+                    continue
+                score.insert(StandardTimeSignature(
+                    onset=offset,
+                    beats=el.numerator,
+                    beat_type=el.denominator
+                ))
+            elif isinstance(el, MetronomeMark):
+                score.insert(StandardTempo(
+                    onset=offset,
+                    note_value=int(el.referent.quarterLength), # type: ignore
+                    tempo=el.number,
+                ))
+            elif isinstance(el, TextExpression):
+                score.insert(StandardTextExpression(
+                    onset=offset,
+                    text = el.content
+                ))
+            elif isinstance(el, _ALLOWED_EXPRESSION):
+                score.insert(StandardExpression.from_str(
+                    onset=offset,
+                    expression=el.__class__.__name__
+                ))
+            elif isinstance(el, Dynamic):
+                if el.value not in _ALLOWED_DYNAMICS:
+                    warnings.warn(f"Dynamic {el.value} not supported")
+                    continue
+                score.insert(StandardDynamics.from_str(
+                    onset=offset,
+                    dynamics=el.value
+                ))
+        return score
 
     @classmethod
     def from_standard(cls, score: StandardScore) -> M21Score:
@@ -329,6 +408,9 @@ def check_rest(obj: Rest):
     assert obj.duration.quarterLength > 0, "Rest must have a positive duration"
 
 def check_expression(expression: Expression):
+    allowed_class_names = set(x.__name__ for x in _ALLOWED_EXPRESSION)
+    expected_class_names = StandardExpression.get_allowed_expressions()
+    assert allowed_class_names == expected_class_names, f"Expression mismatch: {expected_class_names} != {allowed_class_names}"
     assert expression.quarterLength == 0.0, "Expressions must have a duration of 0.0"
     assert isinstance(expression, _ALLOWED_EXPRESSION), f"Expression not supported: {expression}"
 
@@ -346,7 +428,6 @@ def check_expression(expression: Expression):
 
     if isinstance(expression, Fermata):
         assert expression.shape == "normal", "Only normal fermatas are supported"
-
 
 def check_barline(barline: Barline) -> None:
     assert barline.quarterLength == 0.0
@@ -379,8 +460,9 @@ def check_clef(clef: Clef):
     assert clef.octaveChange == 0
 
 def check_dynamics(dynamics: Dynamic):
-    assert dynamics.value in _ALLOWED_DYNAMICS
-    assert dynamics.quarterLength == 0.0
+    assert set(_ALLOWED_DYNAMICS) == StandardDynamics.get_allowed_dynamics() # I don't know where else to check this
+    assert dynamics.value in _ALLOWED_DYNAMICS, f"Dynamic not supported: {dynamics.value}"
+    assert dynamics.quarterLength == 0.0, f"Dynamics must have a duration of 0.0 {dynamics.duration}"
 
 def check_stream(stream: Stream):
     assert isinstance(stream, Score) or stream.activeSite is not None, "Stream must be attached to a site, except for the top level Score"
@@ -498,7 +580,7 @@ def _convert_midi_to_wav(input_path: str, output_path: str, soundfont_path="~/.f
         stdout=subprocess.DEVNULL if not verbose else None,
         stderr=subprocess.DEVNULL if not verbose else None)
 
-def _float_to_fraction_time(f: OffsetQL, *, limit_denom: int = m21.defaults.limitOffsetDenominator, eps: float = 1e-6) -> Fraction:
+def float_to_fraction_time(f: OffsetQL, *, limit_denom: int = m21.defaults.limitOffsetDenominator, eps: float = 1e-6) -> Fraction:
     """Turn a float into a fraction
     limit_denom (int): Limits the denominator to be less than or equal to limit_denom
 
@@ -569,3 +651,229 @@ def get_offset_to_site(obj: GeneralNote, site: Stream) -> OffsetQL | None:
         if x is site:
             return offset
     return None
+
+class MergeViolation(Exception):
+    """Reports a violation in the merging of two measures"""
+    pass
+
+class NoteGroup:
+    isRest = False
+
+    def __init__(self, notes: list[m21.note.Note | m21.chord.Chord | m21.note.Rest]):
+        self.notes = notes
+
+# Assume the following rule:
+# If at the same bar, all 4 voices are active, then voices 2 and 3 becomes the alto voice
+# and voice 4 becomes the bass. Voice 1 will always be the soprano voice.
+# If at the same bar, only 3 voices are active, then voice 2 becomes the alto voice and voice 3
+# becomes the bass.
+# Try to merge the voices according to this rule. If the merge is successful, then it is practically
+# a 3 part score. If not, then it is a 4 part score.
+def measures_all_rest(m: Measure) -> bool:
+    """Returns True if all notes in the measure are rests"""
+    cum_dur = 0.
+    for n in m.notesAndRests:
+        if not n.isRest:
+            return False
+        cum_dur += n.duration.quarterLength
+    return cum_dur == m.barDuration.quarterLength
+
+def fix_rest_and_clef(parts: Iterable[Part]):
+    """Fixes the rests and clefs in the parts. This function will:
+    - Replace measures that are entirely rests with a single rest that spans the entire measure
+    - Replace the clef with the best clef for the part
+
+    The `parts` argument will NOT be deep copied
+    Returns a new M21Score object with the fixed parts"""
+    sanitized_parts = list(parts)
+    for part in sanitized_parts:
+        sanitize_stream(part)
+
+    for data in sanitized_parts:
+        data.makeRests(inPlace=True, fillGaps=True)
+
+        for elem in data.getElementsByClass(Measure):
+            if measures_all_rest(elem):
+                measure_quarter_length = elem.barDuration.quarterLength
+                whole_beat_rest_measure = Measure(number = elem.number)
+                whole_beat_rest_measure.append(m21.note.Rest(measure_quarter_length))
+                data.replace(elem, whole_beat_rest_measure)
+
+        clef = m21.clef.bestClef(data, recurse=True)
+        existing_clef = data.getElementsByClass(m21.clef.Clef)
+        if existing_clef:
+            data.remove(existing_clef[0])
+        data.insert(0, clef)
+
+    # Sanitize a second time to remove any rests that violate rules
+    new_score = Score()
+    for part in sanitized_parts:
+        sanitize_stream(part)
+        new_score.insert(0., part)
+
+    return M21Score(new_score)
+
+def offset_to_score(obj: M21Object, score: M21Score):
+    """Get the offset of the object in the score"""
+    cum = 0.
+    x = obj
+    while x.activeSite is not None:
+        cum += x.offset
+        x = x.activeSite
+        if x is score._data:
+            return cum
+    raise ValueError(f"Object {obj} is not in the score")
+
+def get_part(obj: M21Object, score: M21Score | None = None) -> str | None:
+    """Get the part of the object in the score"""
+    x = obj
+    while x.activeSite is not None:
+        x = x.activeSite
+        if isinstance(x, Part):
+            return str(x.id)
+        if score is None or x is score._data:
+            # We have reached the top of the active site hierarchy
+            break
+    raise ValueError(f"Object {obj} is not in the score")
+
+def get_part_offset_event(new_score: M21Score):
+    """Get the events in each part at each offset. Returns a dictionary where the keys are the part names
+    and the values are a list of tuples (offset, NoteHead) sorted by offset"""
+    part_lookup: dict[str, Part] = {}
+    for i, part in enumerate(new_score._data.getElementsByClass(Part)):
+        part_lookup[str(part.id)] = part
+
+    # At offset = offset, what is happening in each part?
+    # We will store this information in a sorted list to query efficiently.
+    part_offset_events: dict[str, list[tuple[float, m21.note.Note | m21.note.Rest | m21.chord.Chord]]] = {part_name: [] for part_name in part_lookup}
+    for x in new_score._data.recurse().getElementsByClass([
+        m21.note.Note, m21.note.Rest, m21.chord.Chord
+    ]):
+        assert isinstance(x, (m21.note.Note, m21.note.Rest, m21.chord.Chord))
+        part_of_x = get_part(x, new_score)
+        if part_of_x is None:
+            continue
+        part_offset_events[part_of_x].append((offset_to_score(x, new_score), x))
+
+    for event in part_offset_events:
+        part_offset_events[event].sort(key=lambda x: x[0])
+
+    return part_offset_events
+
+def get_note_on_or_before_offset(target_offset: OffsetQL, measure: Measure):
+    notes = measure.recurse().getElementsByClass([
+        m21.note.Note, m21.note.Rest, m21.chord.Chord
+    ]).matchingElements()
+
+    elements = [(offset, x) for x in notes if (offset := get_offset_to_site(x, measure)) is not None]
+    elements.sort(key=lambda x: x[0])
+
+    for offset, note in reversed(elements):
+        if offset <= target_offset:
+            assert isinstance(note, (m21.note.Note, m21.note.Rest, m21.chord.Chord))
+            return note, offset
+    return None, None
+
+def merge_measures(measure1: Measure, measure2: Measure, *, tuplet_upper_bound: int = 41):
+    """Merge two measures together. The measures must be of the same length. We will report a merge violation if
+    two simultaneous notes that are not rests and have different durations"""
+    # TODO Add a shortcut where if one of the bar has a bar rest then clone and return the other bar directly
+    merged_part = measure1.cloneEmpty("merge_measures")
+    offset = Fraction()
+    while offset < measure1.barDuration.quarterLength:
+        note1, offset1 = get_note_on_or_before_offset(offset, measure1)
+        note2, offset2 = get_note_on_or_before_offset(offset, measure2)
+        if note1 is None or note2 is None or offset1 is None or offset2 is None:
+            break
+
+        # Convert to fractions because otherwise floating point antics might happen
+        offset1 = float_to_fraction_time(offset1, limit_denom=tuplet_upper_bound)
+        offset2 = float_to_fraction_time(offset2, limit_denom=tuplet_upper_bound)
+
+        # Do a small sanity check: if offset is at 0, then both offsets should be 0
+        if offset == 0:
+            assert offset1 == 0 and offset2 == 0
+
+        # Now compare the starting offset, if they are not the same,
+        # then at least one of them is a rest, otherwise it is a
+        # merge violation
+        if offset1 != offset2:
+            if not note1.isRest and not note2.isRest:
+                raise MergeViolation(f"Merge violation: {note1} and {note2} are not rests")
+            elif (note1.isRest and offset2 < offset1) or (note2.isRest and offset1 < offset2):
+                ... # Do nothing, we can just skip the rest
+
+            # Otherwise add the note
+            elif note1.isRest:
+                merged_part.insert(offset, note2)
+            else:
+                assert note2.isRest
+                merged_part.insert(offset, note1)
+
+        # If both offsets are equal,
+        # If note 1 is not a rest and note 2 is not a rest
+        # Then they must have the same duration. In this case
+        # we can make a chord out of them
+        # Otherwise it is a merge violation
+        elif not note1.isRest and not note2.isRest:
+            if note1.duration.quarterLength != note2.duration.quarterLength:
+                raise MergeViolation(f"Merge violation: Note durations do not match: {note1.duration.quarterLength} != {note2.duration.quarterLength }")
+            chord = m21.chord.Chord(sorted(set(note1.pitches + note2.pitches)))
+            chord.duration = note1.duration
+            merged_part.insert(offset, chord)
+
+
+        elif note1.isRest and note2.isRest:
+            if note1.duration.quarterLength < note2.duration.quarterLength:
+                merged_part.insert(offset, note1)
+            else:
+                merged_part.insert(offset, note2)
+
+        elif note1.isRest and not note2.isRest:
+            merged_part.insert(offset, note2)
+
+        else:
+            assert note2.isRest and not note1.isRest
+            merged_part.insert(offset, note1)
+
+        # Increment the offset
+        next_measure1_event = offset1 + float_to_fraction_time(note1.duration.quarterLength, limit_denom=tuplet_upper_bound)
+        next_measure2_event = offset2 + float_to_fraction_time(note2.duration.quarterLength, limit_denom=tuplet_upper_bound)
+        offset = min(next_measure1_event, next_measure2_event)
+
+    return merged_part
+
+def separate_voices(score: M21Score):
+    parts = M21Score(score.sanitize()._data.voicesToParts()).parts
+    new_score = fix_rest_and_clef(parts)
+
+    # TODO support other number of parts
+    if len(parts) in (2, 3):
+        return new_score
+    if len(parts) != 4:
+        raise ValueError("Expected 2, 3, or 4 parts")
+
+    parts = new_score.parts
+    soprano = parts[0].cloneEmpty("separate_voices")
+    alto = parts[1].cloneEmpty("separate_voices")
+    bass = parts[2].cloneEmpty("separate_voices")
+
+    try:
+        for i in new_score.measure_numbers():
+            offset = offset_to_score(new_score.get_measure(0, i), new_score)
+            soprano.insert(offset, new_score.get_measure(0, i))
+            if not measures_all_rest(new_score.get_measure(3, i)):
+                measure1 = new_score.get_measure(1, i)
+                measure2 = new_score.get_measure(2, i)
+                merged_measure = merge_measures(measure1, measure2)
+                alto.insert(offset, merged_measure)
+                bass.insert(offset, new_score.get_measure(3, i))
+            else:
+                alto.insert(offset, new_score.get_measure(1, i))
+                bass.insert(offset, new_score.get_measure(2, i))
+    except MergeViolation as e:
+        # If there is a merge violation, then we will just return the original parts
+        # Fix again just in case we accidentally modified the original parts
+        return fix_rest_and_clef(parts)
+
+    return fix_rest_and_clef([soprano, alto, bass])

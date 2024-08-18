@@ -76,10 +76,10 @@ class KeySignature(StandardScoreElement):
     "nsharps: int (flats will be negative number)"
 
     mode: int
-    "mode: int (0 for major, 1 for minor)"
+    "mode: int (0 for major, 1 for minor, -1 for unknown)"
 
     def __post_init__(self):
-        assert self.mode in (0, 1)
+        assert self.mode in (0, 1, -1)
 
     @property
     def key(self):
@@ -125,7 +125,14 @@ class Expression(StandardScoreElement):
 
     @classmethod
     def from_str(cls, onset: float, expression: str):
+        expression = expression.lower()
+        if expression == "invertedmordent":
+            expression = "inverted-mordent"
         return cls(onset, ExpressionType(expression))
+
+    @staticmethod
+    def get_allowed_expressions():
+        return set(x.value for x in ExpressionType)
 
 
 @dataclass(frozen=True)
@@ -154,19 +161,9 @@ class Dynamics(StandardScoreElement):
     def from_str(cls, onset: float, dynamics: str):
         return cls(onset, DynamicsType(dynamics))
 
-class ArticulationType(enum.StrEnum):
-    ACCENT = "accent"
-    STACCATO = "staccato"
-    TENUTO = "tenuto"
-
-
-@dataclass(frozen=True)
-class Articulation(StandardScoreElement):
-    articulation: ArticulationType
-
-    @classmethod
-    def from_str(cls, onset: float, articulation: str):
-        return cls(onset, ArticulationType(articulation))
+    @staticmethod
+    def get_allowed_dynamics():
+        return set(x.value for x in DynamicsType)
 
 
 class StandardScore(ScoreRepresentation):
@@ -191,6 +188,13 @@ class StandardScore(ScoreRepresentation):
         score = cls()
         score.elements = AVLTree.from_sorted_array(arr, _check=_check)
         return score
+
+    @classmethod
+    def from_standard(cls, score: StandardScore) -> ScoreRepresentation:
+        return score
+
+    def to_standard(self) -> StandardScore:
+        return self
 
     def iter(self):
         return self.elements.iter()

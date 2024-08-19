@@ -79,80 +79,44 @@ def compute_chroma_vector_array(chroma_array: NDArray[np.int_], K_pre: int, K_po
     return np.array(chroma_vector_list)
 
 # The morph pitch is the diatonic pitch class of the note. Middle C is 23.
-def compute_morph_array(chroma_array, chroma_vector_array):
+# Refer to partitura.musicanalysis.predict_spelling implementation
+# and the original paper for more info
+def compute_morph_array(chroma_array: NDArray[np.int_], chroma_vector_array: NDArray[np.int_]):
     n = len(chroma_array)
-    # Line 1: Initialize morph array
-    morph_array = np.empty(n, dtype=int)
+    morph_array = np.empty((n, 7), dtype=int)
 
-    # Compute m0
-    # Line 2
     init_morph = np.array([0, 1, 1, 2, 2, 3, 4, 4, 5, 5, 6, 6], dtype=int)
-    # Line 3
     c0 = chroma_array[0]
-    # Line 4
     m0 = init_morph[c0]
 
-    # Line 5
     morph_int = np.array([0, 1, 1, 2, 2, 3, 3, 4, 5, 5, 6, 6], dtype=int)
 
-    # Lines 6-8
     tonic_morph_for_tonic_chroma = np.mod(
         m0 - morph_int[np.mod(c0 - np.arange(12), 12)], 7
     )
 
-    # Line 10
-    tonic_chroma_set_for_morph = [[] for i in range(7)]
+    tonic_chroma_set_for_morph = [[] for _ in range(7)]
 
-    # Line 11
-    morph_strength = np.zeros(7, dtype=int)
-
-    # Line 12
     for j in range(n):
-        # Lines 13-15 (skipped line 9, since we do not need to
-        # initialize morph_for_tonic_chroma)
         morph_for_tonic_chroma = np.mod(
             morph_int[np.mod(chroma_array[j] - np.arange(12), 12)]
             + tonic_morph_for_tonic_chroma,
             7,
         )
-        # Lines 16-17
-        tonic_chroma_set_for_morph = [[] for i in range(7)]
+        tonic_chroma_set_for_morph = [[] for _ in range(7)]
 
-        # Line 18
         for m in range(7):
-            # Line 19
             for ct in range(12):
-                # Line 20
                 if morph_for_tonic_chroma[ct] == m:
-                    # Line 21
                     tonic_chroma_set_for_morph[m].append(ct)
 
-        # Line 22
         for m in range(7):
-            # Line 23
-            morph_strength[m] = sum(
+            morph_array[j, m] = sum(
                 [chroma_vector_array[j, ct] for ct in tonic_chroma_set_for_morph[m]]
             )
-
-        # Line 24
-        morph_array[j] = np.argmax(morph_strength)
-
     return morph_array
 
-
-def compute_ocm_chord_list(sorted_ocp, chroma_array, morph_array):
-    # Lines 1-3
-    ocm_array = np.column_stack((sorted_ocp[:, 0], chroma_array, morph_array)).astype(int)
-
-    # Alternative implementation of lines 4--9
-    unique_onsets = np.unique(ocm_array[:, 0])
-    unique_onset_idxs = [np.where(ocm_array[:, 0] == u) for u in unique_onsets]
-    ocm_chord_list = [ocm_array[uix] for uix in unique_onset_idxs]
-
-    return ocm_chord_list
-
-
-def compute_morphetic_pitch(chromatic_pitch: NDArray, morph_array: NDArray):
+def compute_morphetic_pitch(chromatic_pitch: NDArray[np.int_], morph_array: NDArray[np.int_]):
     n = len(chromatic_pitch)
     morph = morph_array.reshape(-1, 1)
 
@@ -209,10 +173,12 @@ def predict_spelling(score: ScoreRepresentation, context_window: tuple[int, int]
         chroma_array=chroma_array, K_pre=context_window[0], K_post=context_window[1]
     )
 
-    # Shape (n,). arr[i] is the morph of the ith note, where A is 0
+    # Shape (n,, 7). arr[i, k] is the morph strength of 'k' of the ith note, where A is 0
+    # So for example arr[3, 0] is the morph strength of A for the 3rd note
     morph_array = compute_morph_array(
         chroma_array=chroma_array, chroma_vector_array=chroma_vector_array
     )
+    morph_array = morph_array.argmax(axis=1)
 
     # Shape (n,). arr[i] is the morphetic pitch of the ith note i.e. the morphetic pitch implied by the morph and the pitch number
     morphetic_pitch = compute_morphetic_pitch(chromatic_pitch, morph_array)
@@ -226,8 +192,8 @@ def predict_spelling(score: ScoreRepresentation, context_window: tuple[int, int]
         pred_step=s,
         pred_alter=a,
         pred_octave=o,
-        real_step=note.note_name.step,
-        real_alter=note.note_name.alter,
+        real_step=note.step,
+        real_alter=note.alter,
         real_octave=note.octave,
     ) for note, s, a, o in zip(notes, step, alter, octave)]
 

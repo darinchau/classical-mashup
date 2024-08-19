@@ -159,3 +159,43 @@ class SimpleNote:
 
     def __eq__(self, other: SimpleNote):
         return self.index == other.index
+
+@dataclass(frozen=True)
+class StandardNote:
+    """A standard note is a representation of a note on the piano, with a note name and an octave"""
+    pitch: SimpleNote
+    octave: int
+
+    def __repr__(self):
+        return f"StandardNote({self.pitch.note_name}{self.octave})"
+
+    @classmethod
+    def from_str(cls, note: str) -> StandardNote:
+        """Creates a StandardNote from a string note."""
+        octave = int(note[-1])
+        return cls(SimpleNote(note[:-1]), octave)
+
+    @classmethod
+    def from_pitch(cls, pitch: m21.pitch.Pitch) -> StandardNote:
+        """Creates a StandardNote from a music21 pitch."""
+        return cls(SimpleNote.from_pitch(pitch), pitch.implicitOctave)
+
+    @classmethod
+    def from_note(cls, note: m21.note.Note) -> StandardNote:
+        """Creates a StandardNote from a music21 note."""
+        return cls.from_pitch(note.pitch)
+
+    @property
+    def pitch_number(self):
+        """The chromatic pitch number of the note. Middle C is 60"""
+        return self.pitch.pitch_number + 12 * self.octave + 12
+
+    @property
+    def step_number(self):
+        """The step number of the note. Middle C is 23 and in/decreases by 1 for each step."""
+        return 7 * self.octave + self.pitch.step_number - 5
+
+    @property
+    def step_name(self):
+        """The step name of the note. Middle C is C4."""
+        return f"{self.pitch.step}{self.octave}"

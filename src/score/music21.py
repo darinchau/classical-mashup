@@ -14,7 +14,7 @@ from .standard import (
     Expression as StandardExpression,
     TextExpression as StandardTextExpression,
 )
-from .simplenote import SimpleNote
+from .simplenote import SimpleNote, StandardNote
 from fractions import Fraction
 from music21 import common
 from music21.articulations import Accent, Staccato, Tenuto
@@ -125,8 +125,7 @@ class M21Score(ScoreRepresentation):
                 score.insert(NoteElement(
                     onset = offset,
                     duration = float(el.duration.quarterLength),
-                    note_name = SimpleNote.from_note(el),
-                    octave = el.pitch.implicitOctave,
+                    note_name = StandardNote.from_note(el),
                     voice = 0, # TODO support multiple voices
                 ))
             elif isinstance(el, Chord):
@@ -134,8 +133,7 @@ class M21Score(ScoreRepresentation):
                     score.insert(NoteElement(
                         onset=offset,
                         duration=float(el.duration.quarterLength),
-                        note_name=SimpleNote.from_pitch(p),
-                        octave=p.implicitOctave,
+                        note_name=StandardNote.from_pitch(p),
                         voice = 0
                     ))
             elif isinstance(el, Key):

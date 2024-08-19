@@ -1,6 +1,6 @@
 from __future__ import annotations
 from .base import ScoreRepresentation
-from .simplenote import SimpleNote
+from .simplenote import SimpleNote, StandardNote
 from ..util.avl import AVLTree
 import enum
 from dataclasses import dataclass, astuple
@@ -39,11 +39,7 @@ class NoteElement(StandardScoreElement):
     duration: float
     "duration: float (in quarter notes from start)"
 
-    note_name: SimpleNote
-    "note_name: SimpleNote"
-
-    octave: int
-    "octave: int. Middle C is octave 4. Bottom note is A0. Top note is C8."
+    note_name: StandardNote
 
     voice: int
     """voice: int - If there are any voices in the score, this is the voice number.
@@ -54,23 +50,34 @@ class NoteElement(StandardScoreElement):
     @classmethod
     def from_note_name(cls, note: str):
         """Purely for testing purposes. Converts a string note to a NoteElement."""
-        octave = int(note[-1])
-        return cls(0.0, 1.0, SimpleNote(note[:-1]), octave, 0)
+        return cls(0.0, 1.0, StandardNote.from_str(note), 0)
 
     @property
     def pitch_number(self):
         """The chromatic pitch number of the note. Middle C is 60"""
-        return self.note_name.pitch_number + 12 * self.octave + 12
+        return self.note_name.pitch_number
 
     @property
     def step_number(self):
         """The step number of the note. Middle C is 23 and in/decreases by 1 for each step."""
-        return 7 * self.octave + self.note_name.step_number - 5
+        return self.note_name.step_number
 
     @property
     def step_name(self):
         """The step name of the note. Middle C is C4."""
-        return self.note_name.step
+        return self.note_name.step_name
+
+    @property
+    def step(self):
+        return self.note_name.pitch.step
+
+    @property
+    def alter(self):
+        return self.note_name.pitch.alter
+
+    @property
+    def octave(self):
+        return self.note_name.octave
 
     def __key__(self):
         return (self.onset, self.pitch_number, self.duration)

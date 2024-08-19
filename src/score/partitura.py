@@ -122,6 +122,10 @@ class PartituraNote:
         from .simplenote import SimpleNote
         return SimpleNote.from_step_alter(self.step, self.alter)
 
+    def to_standard_note(self):
+        from .standard import StandardNote
+        return StandardNote(self.to_simple_note(), self.octave)
+
     def __lt__(self, other: PartituraNote):
         return (self.onset_beat, self.pitch) < (other.onset_beat, other.pitch)
 
@@ -160,8 +164,7 @@ class PartituraScore(ScoreRepresentation):
             NoteElement(
                 onset = note.onset_quarter,
                 duration = note.duration_quarter,
-                note_name=note.to_simple_note(),
-                octave=note.octave,
+                note_name=note.to_standard_note(),
                 voice=note.voice
             ) for note in self.notes
         ])
@@ -221,7 +224,6 @@ class PartituraScore(ScoreRepresentation):
             yield NoteElement(
                 onset = x.onset_quarter,
                 duration = x.duration_quarter,
-                note_name = x.to_simple_note(),
-                octave = x.octave,
+                note_name = x.to_standard_note(),
                 voice = x.voice
             )

@@ -2,7 +2,7 @@ import numpy as np
 from numpy.typing import NDArray
 from dataclasses import dataclass
 import typing
-from ..score import StandardScore, ScoreRepresentation
+from ..score import StandardScore, ScoreRepresentation, NoteElement
 
 STEPS = np.array(["A", "B", "C", "D", "E", "F", "G"])
 UNDISPLACED_CHROMA = np.array([0, 2, 3, 5, 7, 8, 10], dtype=int)
@@ -65,17 +65,12 @@ def compute_chroma_vector_array(chroma_array: NDArray[np.int_], K_pre: int, K_po
 
     for i in range(1, n):
         if i + K_post <= n:
-            chroma_vector[chroma_array[i + K_post - 1]] = (
-                1 + chroma_vector[chroma_array[i + K_post - 1]]
-            )
+            chroma_vector[chroma_array[i + K_post - 1]] += 1
 
         if i - K_pre > 0:
-            chroma_vector[chroma_array[i - K_pre - 1]] = (
-                chroma_vector[chroma_array[i - K_pre - 1]] - 1
-            )
+            chroma_vector[chroma_array[i - K_pre - 1]] -= 1
 
         chroma_vector_list.append(chroma_vector.copy())
-
     return np.array(chroma_vector_list)
 
 # The morph pitch is the diatonic pitch class of the note. Middle C is 23.
@@ -110,13 +105,13 @@ def compute_morph_array(chroma_array: NDArray[np.int_], chroma_vector_array: NDA
                 if morph_for_tonic_chroma[ct] == m:
                     tonic_chroma_set_for_morph[m].append(ct)
 
-        for m in range(7):
             morph_array[j, m] = sum(
                 [chroma_vector_array[j, ct] for ct in tonic_chroma_set_for_morph[m]]
             )
     return morph_array
 
 def compute_morphetic_pitch(chromatic_pitch: NDArray[np.int_], morph_array: NDArray[np.int_]):
+    """Compute the morph of the notes from the chromatic pitch and morph array"""
     n = len(chromatic_pitch)
     morph = morph_array.reshape(-1, 1)
 
@@ -154,16 +149,7 @@ def chromatic_pitch_to_pitch_name(chromatic_pitch: NDArray[PitchType], morphetic
     asa_octave[morph > 1] += 1
     return step, alter, asa_octave
 
-def predict_spelling(score: ScoreRepresentation, context_window: tuple[int, int] = (10, 40)):
-    """Performs stage 1 of Meredith's ps13 algorithm. Assumes the note representations are sorted (i.e. straight from s.get_note_representation())"""
-    notes = list(score.note_elements())
-    onset = np.array([n.onset for n in notes], dtype=np.float64)
-    pitch = np.array([n.pitch_number for n in notes], dtype=np.int64)
-    duration = np.array([n.duration for n in notes], dtype=np.float64)
-
-    # ocp = onset, chromatic pitch
-    chromatic_pitch = chromatic_pitch_from_midi(pitch)
-
+def get_morph_probabilities(chromatic_pitch: NDArray[np.int64], context_window: tuple[int, int] = (10, 40)) -> NDArray[np.float64]:
     # Shape (n,). arr[i] is the chroma of the ith note, where C is 0
     chroma_array = compute_chroma_array(chromatic_pitch)
 
@@ -173,11 +159,22 @@ def predict_spelling(score: ScoreRepresentation, context_window: tuple[int, int]
         chroma_array=chroma_array, K_pre=context_window[0], K_post=context_window[1]
     )
 
-    # Shape (n,, 7). arr[i, k] is the morph strength of 'k' of the ith note, where A is 0
-    # So for example arr[3, 0] is the morph strength of A for the 3rd note
+    # Shape (n, 7). arr[i] is the morph vector of the ith note
+    # where A is 0, B is 1, etc.
     morph_array = compute_morph_array(
         chroma_array=chroma_array, chroma_vector_array=chroma_vector_array
     )
+
+    mp = morph_array / np.sum(morph_array, axis=1, keepdims=True)
+    return mp
+
+def predict_spelling(score: ScoreRepresentation, context_window: tuple[int, int] = (10, 40)):
+    """Performs stage 1 of Meredith's ps13 algorithm"""
+    notes = list(score.note_elements())
+    pitch = np.array([n.pitch_number for n in notes], dtype=np.int64)
+
+    chromatic_pitch = chromatic_pitch_from_midi(pitch)
+    morph_array = get_morph_probabilities(chromatic_pitch, context_window)
     morph_array = morph_array.argmax(axis=1)
 
     # Shape (n,). arr[i] is the morphetic pitch of the ith note i.e. the morphetic pitch implied by the morph and the pitch number
@@ -185,7 +182,7 @@ def predict_spelling(score: ScoreRepresentation, context_window: tuple[int, int]
 
     step, alter, octave = chromatic_pitch_to_pitch_name(chromatic_pitch, morphetic_pitch.reshape(-1,))
 
-    notes = [PredictedNote(
+    return [PredictedNote(
         onset_beat=note.onset,
         pitch=note.pitch_number,
         duration_beat=note.duration,
@@ -197,4 +194,8 @@ def predict_spelling(score: ScoreRepresentation, context_window: tuple[int, int]
         real_octave=note.octave,
     ) for note, s, a, o in zip(notes, step, alter, octave)]
 
-    return notes
+## We can actually go much farther with Meredith's idea.
+# 1. Instead of predicting the spelling, we can predict the probability of each spelling
+# 2. We can find and extract specified "note patterns" to increase the probability of certain spellings
+# For example, if we see a C major chord, we can increase the probability of C, E, and G at the respective notes
+# So find all voice leadings and all vertical harmonies.

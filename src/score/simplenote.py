@@ -169,6 +169,11 @@ class StandardNote:
     def __repr__(self):
         return f"StandardNote({self.pitch.note_name}{self.octave})"
 
+    @property
+    def note_name(self):
+        """The note name of the note."""
+        return f"{self.pitch.note_name}{self.octave}"
+
     @classmethod
     def from_str(cls, note: str) -> StandardNote:
         """Creates a StandardNote from a string note."""

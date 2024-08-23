@@ -164,7 +164,7 @@ class PartituraScore(ScoreRepresentation):
             NoteElement(
                 onset = note.onset_quarter,
                 duration = note.duration_quarter,
-                note_name=note.to_standard_note(),
+                note=note.to_standard_note(),
                 voice=note.voice
             ) for note in self.notes
         ])
@@ -224,6 +224,6 @@ class PartituraScore(ScoreRepresentation):
             yield NoteElement(
                 onset = x.onset_quarter,
                 duration = x.duration_quarter,
-                note_name = x.to_standard_note(),
+                note = x.to_standard_note(),
                 voice = x.voice
             )

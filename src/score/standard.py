@@ -39,7 +39,7 @@ class NoteElement(StandardScoreElement):
     duration: float
     "duration: float (in quarter notes from start)"
 
-    note_name: StandardNote
+    note: StandardNote
 
     voice: int
     """voice: int - If there are any voices in the score, this is the voice number.
@@ -53,31 +53,36 @@ class NoteElement(StandardScoreElement):
         return cls(0.0, 1.0, StandardNote.from_str(note), 0)
 
     @property
+    def note_name(self):
+        """The note name of the note."""
+        return self.note.note_name
+
+    @property
     def pitch_number(self):
         """The chromatic pitch number of the note. Middle C is 60"""
-        return self.note_name.pitch_number
+        return self.note.pitch_number
 
     @property
     def step_number(self):
         """The step number of the note. Middle C is 23 and in/decreases by 1 for each step."""
-        return self.note_name.step_number
+        return self.note.step_number
 
     @property
     def step_name(self):
         """The step name of the note. Middle C is C4."""
-        return self.note_name.step_name
+        return self.note.step_name
 
     @property
     def step(self):
-        return self.note_name.pitch.step
+        return self.note.pitch.step
 
     @property
     def alter(self):
-        return self.note_name.pitch.alter
+        return self.note.pitch.alter
 
     @property
     def octave(self):
-        return self.note_name.octave
+        return self.note.octave
 
     def __key__(self):
         return (self.onset, self.pitch_number, self.duration)

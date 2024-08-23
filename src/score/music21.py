@@ -125,7 +125,7 @@ class M21Score(ScoreRepresentation):
                 score.insert(NoteElement(
                     onset = offset,
                     duration = float(el.duration.quarterLength),
-                    note_name = StandardNote.from_note(el),
+                    note = StandardNote.from_note(el),
                     voice = 0, # TODO support multiple voices
                 ))
             elif isinstance(el, Chord):
@@ -133,7 +133,7 @@ class M21Score(ScoreRepresentation):
                     score.insert(NoteElement(
                         onset=offset,
                         duration=float(el.duration.quarterLength),
-                        note_name=StandardNote.from_pitch(p),
+                        note=StandardNote.from_pitch(p),
                         voice = 0
                     ))
             elif isinstance(el, Key):
